@@ -38,7 +38,7 @@ def send_message(query: str) -> str:
             "conversation_history": conversation_history
         }
         
-        response = requests.post(f"{API_URL}/chat", json=payload, timeout=60)
+        response = requests.post(f"{API_URL}/chat", json=payload, timeout=120)
         response.raise_for_status()
         result = response.json()
         return result.get("response", "No response received")

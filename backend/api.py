@@ -65,6 +65,8 @@ def parse_tool_name(function_name: str) -> Tuple[str, str]:
         return ("calendar", function_name[9:])
     elif function_name.startswith("gmail_"):
         return ("gmail", function_name[6:])
+    elif function_name.startswith("flashcard_"):
+        return ("flashcard", function_name[10:])
     else:
         raise ValueError(f"Unknown function prefix: {function_name}")
 
@@ -87,8 +89,19 @@ async def chat(request: QueryRequest):
         
         # Add system message
         system_message = """You are a helpful assistant that can interact with Canvas (course management), 
-Google Calendar, and Gmail. You have access to various tools to help users manage their courses, 
-schedule events, and handle emails. Use the tools when needed to answer user queries."""
+Google Calendar, Gmail, and Flashcards. You have access to various tools to help users manage their courses, 
+schedule events, handle emails, and create study flashcards. 
+
+For flashcard creation (KEEP IT SIMPLE AND FAST):
+1. Get course: Use canvas_get_courses to find the course
+2. Get content: Use canvas_get_page_content for 1-2 key pages OR canvas_get_assignment_details for assignment info. DON'T fetch too much content.
+3. Create set: Use flashcard_create_set with course_id and course_name. Save the set_id.
+4. Generate: Use flashcard_generate with course_context (limit to key content, max 2-3 pages). Default generates 5 flashcards quickly.
+5. Add: Use flashcard_add_flashcards with the set_id and generated flashcards.
+
+IMPORTANT: Keep course_context short (1-2 pages max). Too much content causes timeouts. Prefer assignment descriptions over full page content when possible.
+
+Use the tools when needed to answer user queries."""
         messages.append({"role": "system", "content": system_message})
         
         # Add conversation history
@@ -102,7 +115,7 @@ schedule events, and handle emails. Use the tools when needed to answer user que
         tools = MCPService.get_all_tools()
         
         # Call OpenRouter API
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             max_iterations = 10  # Limit tool call iterations
             iteration = 0
             

@@ -43,6 +43,21 @@ from gmail_mcp_server import (
     delete_message
 )
 
+# Flashcard storage
+from flashcard_storage import FlashcardStorage
+
+# Flashcard generation
+from flashcard_generator import generate_flashcards_from_context
+
+# Canvas additional functions
+from mcp_server import (
+    get_assignment_details,
+    get_course_modules,
+    get_course_files,
+    get_course_pages,
+    get_page_content
+)
+
 
 class MCPService:
     """Service layer for MCP tools."""
@@ -53,7 +68,7 @@ class MCPService:
         Call a tool from an MCP server.
         
         Args:
-            server_name: Name of the MCP server ('canvas', 'calendar', 'gmail')
+            server_name: Name of the MCP server ('canvas', 'calendar', 'gmail', 'flashcard')
             tool_name: Name of the tool to call
             arguments: Tool arguments
             
@@ -70,6 +85,8 @@ class MCPService:
                 return await MCPService._call_calendar_tool(tool_name, arguments)
             elif server_name == "gmail":
                 return await MCPService._call_gmail_tool(tool_name, arguments)
+            elif server_name == "flashcard":
+                return await MCPService._call_flashcard_tool(tool_name, arguments)
             else:
                 return f"Error: Unknown server '{server_name}'"
         except Exception as e:
@@ -107,6 +124,67 @@ class MCPService:
         
         elif tool_name == "get_daily_briefing":
             return build_daily_briefing()
+        
+        elif tool_name == "get_assignment_details":
+            course_id = arguments.get("course_id")
+            assignment_id = arguments.get("assignment_id")
+            if not course_id or not assignment_id:
+                return "Error: 'course_id' and 'assignment_id' are required."
+            details = get_assignment_details(course_id, assignment_id)
+            formatted = "Assignment Details:\n\n"
+            formatted += f"Name: {details['name']}\n"
+            formatted += f"Course: {details['course_name']}\n"
+            formatted += f"Due Date: {details['due_at']}\n"
+            if details.get('description'):
+                formatted += f"\nDescription:\n{details['description'][:500]}...\n" if len(details['description']) > 500 else f"\nDescription:\n{details['description']}\n"
+            return formatted
+        
+        elif tool_name == "get_course_modules":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return "Error: 'course_id' is required."
+            modules = get_course_modules(course_id)
+            if not modules:
+                return f"No modules found for course {course_id}."
+            formatted = f"Course Modules ({len(modules)}):\n\n"
+            for module in modules:
+                formatted += f"Module: {module['name']}\n"
+                formatted += f"  Items: {len(module['items'])}\n"
+            return formatted
+        
+        elif tool_name == "get_course_files":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return "Error: 'course_id' is required."
+            files = get_course_files(course_id)
+            if not files:
+                return f"No files found for course {course_id}."
+            formatted = f"Course Files ({len(files)}):\n\n"
+            for file in files[:10]:
+                formatted += f"• {file['display_name']}\n"
+            return formatted
+        
+        elif tool_name == "get_course_pages":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return "Error: 'course_id' is required."
+            pages = get_course_pages(course_id)
+            if not pages:
+                return f"No pages found for course {course_id}."
+            formatted = f"Course Pages ({len(pages)}):\n\n"
+            for page in pages:
+                formatted += f"• {page['title']}\n"
+            return formatted
+        
+        elif tool_name == "get_page_content":
+            course_id = arguments.get("course_id")
+            page_url = arguments.get("page_url")
+            if not course_id or not page_url:
+                return "Error: 'course_id' and 'page_url' are required."
+            page_content = get_page_content(course_id, page_url)
+            formatted = f"Page: {page_content['title']}\n\n"
+            formatted += f"Content:\n{page_content['body']}"
+            return formatted
         
         elif tool_name == "create_assignment":
             course_id = arguments.get("course_id")
@@ -387,6 +465,169 @@ class MCPService:
             return f"Error: Unknown Gmail tool '{tool_name}'"
     
     @staticmethod
+    async def _call_flashcard_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Call a Flashcard tool.
+        
+        Note: tool_name has the 'flashcard_' prefix removed by parse_tool_name.
+        So 'flashcard_create_set' becomes 'create_set'.
+        """
+        if tool_name == "create_set":
+            course_id = arguments.get("course_id")
+            course_name = arguments.get("course_name")
+            assignment_id = arguments.get("assignment_id")
+            assignment_name = arguments.get("assignment_name")
+            notes = arguments.get("notes")
+            
+            if not course_id or not course_name:
+                return "Error: 'course_id' and 'course_name' are required."
+            
+            set_id = FlashcardStorage.create_flashcard_set(
+                course_id=course_id,
+                course_name=course_name,
+                assignment_id=assignment_id,
+                assignment_name=assignment_name,
+                notes=notes
+            )
+            
+            formatted = "✅ Flashcard set created successfully!\n\n"
+            formatted += f"Set ID: {set_id}\n"
+            formatted += f"Course: {course_name}\n"
+            if assignment_name:
+                formatted += f"Assignment: {assignment_name}\n"
+            return formatted
+        
+        elif tool_name == "add_flashcards":
+            set_id = arguments.get("set_id")
+            flashcards = arguments.get("flashcards", [])
+            
+            if not set_id or not flashcards:
+                return "Error: 'set_id' and 'flashcards' are required."
+            
+            FlashcardStorage.add_flashcards_to_set(set_id, flashcards)
+            return f"✅ Added {len(flashcards)} flashcard(s) to set {set_id}!"
+        
+        elif tool_name == "generate":
+            # This tool generates flashcards using Claude from course context
+            course_context = arguments.get("course_context", "")
+            student_notes = arguments.get("student_notes")
+            assignment_context = arguments.get("assignment_context")
+            num_flashcards = arguments.get("num_flashcards", 5)  # Default to 5 for speed
+            
+            if not course_context:
+                return "Error: 'course_context' is required to generate flashcards."
+            
+            # Limit num_flashcards to prevent timeouts
+            if num_flashcards > 10:
+                num_flashcards = 10
+            
+            try:
+                flashcards = await generate_flashcards_from_context(
+                    course_context=course_context,
+                    student_notes=student_notes,
+                    assignment_context=assignment_context,
+                    num_flashcards=num_flashcards
+                )
+                
+                # Return flashcards in a format Claude can use
+                import json
+                flashcards_json = json.dumps(flashcards, indent=2)
+                return f"✅ Generated {len(flashcards)} flashcards:\n\n{flashcards_json}\n\nUse flashcard_add_flashcards with set_id to add these to a flashcard set."
+            except Exception as e:
+                return f"Error generating flashcards: {str(e)}"
+        
+        elif tool_name == "get_set":
+            set_id = arguments.get("set_id")
+            if not set_id:
+                return "Error: 'set_id' is required."
+            
+            flashcard_set = FlashcardStorage.get_flashcard_set(set_id)
+            if not flashcard_set:
+                return f"Error: Flashcard set {set_id} not found."
+            
+            formatted = f"Flashcard Set: {flashcard_set['course_name']}\n\n"
+            formatted += f"Flashcards: {len(flashcard_set.get('flashcards', []))}\n"
+            if flashcard_set.get('assignment_name'):
+                formatted += f"Assignment: {flashcard_set['assignment_name']}\n"
+            return formatted
+        
+        elif tool_name == "get_sets_by_course":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return "Error: 'course_id' is required."
+            
+            sets = FlashcardStorage.get_flashcard_sets_by_course(course_id)
+            if not sets:
+                return f"No flashcard sets found for course {course_id}."
+            
+            formatted = f"Flashcard Sets ({len(sets)}):\n\n"
+            for s in sets:
+                formatted += f"• Set ID: {s['id']}\n"
+                formatted += f"  Flashcards: {len(s.get('flashcards', []))}\n"
+            return formatted
+        
+        elif tool_name == "get_needing_review":
+            set_id = arguments.get("set_id")
+            limit = arguments.get("limit")
+            
+            if not set_id:
+                return "Error: 'set_id' is required."
+            
+            flashcards = FlashcardStorage.get_flashcards_needing_review(set_id, limit)
+            if not flashcards:
+                return f"No flashcards needing review in set {set_id}."
+            
+            formatted = f"Flashcards Needing Review ({len(flashcards)}):\n\n"
+            for i, card in enumerate(flashcards, 1):
+                formatted += f"{i}. Q: {card.get('question', 'N/A')}\n"
+                formatted += f"   A: {card.get('answer', 'N/A')}\n\n"
+            return formatted
+        
+        elif tool_name == "record_review":
+            set_id = arguments.get("set_id")
+            flashcard_id = arguments.get("flashcard_id")
+            correct = arguments.get("correct")
+            
+            if not set_id or not flashcard_id or correct is None:
+                return "Error: 'set_id', 'flashcard_id', and 'correct' are required."
+            
+            FlashcardStorage.record_flashcard_review(set_id, flashcard_id, correct)
+            status = "correct" if correct else "incorrect"
+            return f"✅ Recorded flashcard review: {status}"
+        
+        elif tool_name == "get_progress":
+            set_id = arguments.get("set_id")
+            if not set_id:
+                return "Error: 'set_id' is required."
+            
+            progress = FlashcardStorage.get_flashcard_progress(set_id)
+            formatted = f"Flashcard Progress:\n\n"
+            formatted += f"Total Reviews: {progress.get('total_reviews', 0)}\n"
+            formatted += f"Mastered: {progress.get('mastered_count', 0)}\n"
+            formatted += f"Needs Review: {progress.get('needs_review_count', 0)}\n"
+            return formatted
+        
+        elif tool_name == "get_all_sets":
+            sets = FlashcardStorage.get_all_sets()
+            if not sets:
+                return "No flashcard sets found."
+            
+            formatted = f"All Flashcard Sets ({len(sets)}):\n\n"
+            for s in sets:
+                formatted += f"• {s['course_name']} - Set ID: {s['id']}\n"
+            return formatted
+        
+        elif tool_name == "delete_set":
+            set_id = arguments.get("set_id")
+            if not set_id:
+                return "Error: 'set_id' is required."
+            
+            FlashcardStorage.delete_flashcard_set(set_id)
+            return f"✅ Flashcard set {set_id} deleted successfully."
+        
+        else:
+            return f"Error: Unknown Flashcard tool '{tool_name}'"
+    
+    @staticmethod
     def get_all_tools() -> List[Dict[str, Any]]:
         """Get all available tools from all MCP servers."""
         tools = []
@@ -466,6 +707,78 @@ class MCPService:
                             "assignment_id": {"type": "integer", "description": "The ID of the assignment to delete"}
                         },
                         "required": ["course_id", "assignment_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "canvas_get_assignment_details",
+                    "description": "Get detailed information about a specific assignment including description and rubric",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"},
+                            "assignment_id": {"type": "integer", "description": "The ID of the assignment"}
+                        },
+                        "required": ["course_id", "assignment_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "canvas_get_course_modules",
+                    "description": "Get all modules and module items for a course",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"}
+                        },
+                        "required": ["course_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "canvas_get_course_files",
+                    "description": "Get all files for a course",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"}
+                        },
+                        "required": ["course_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "canvas_get_course_pages",
+                    "description": "Get all pages for a course",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"}
+                        },
+                        "required": ["course_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "canvas_get_page_content",
+                    "description": "Get the HTML/text content of a Canvas page. Use this to get content from pages for flashcard generation.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"},
+                            "page_url": {"type": "string", "description": "The URL slug of the page (e.g., 'syllabus')"}
+                        },
+                        "required": ["course_id", "page_url"]
                     }
                 }
             }
@@ -584,6 +897,170 @@ class MCPService:
                             "body_type": {"type": "string", "description": "Body type: 'plain' or 'html'", "default": "plain"}
                         },
                         "required": ["to", "subject", "body"]
+                    }
+                }
+            }
+        ])
+        
+        # Flashcard tools
+        tools.extend([
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_create_set",
+                    "description": "Create a new flashcard set for a course, optionally linked to an assignment",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"},
+                            "course_name": {"type": "string", "description": "The name of the course"},
+                            "assignment_id": {"type": "integer", "description": "Optional: The ID of the assignment"},
+                            "assignment_name": {"type": "string", "description": "Optional: The name of the assignment"},
+                            "notes": {"type": "string", "description": "Optional: Student notes to include"}
+                        },
+                        "required": ["course_id", "course_name"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_add_flashcards",
+                    "description": "Add flashcards to an existing flashcard set. Provide flashcards as a list with 'question' and 'answer' fields.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "set_id": {"type": "string", "description": "The ID of the flashcard set"},
+                            "flashcards": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "question": {"type": "string", "description": "The question/front of the flashcard"},
+                                        "answer": {"type": "string", "description": "The answer/back of the flashcard"},
+                                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"}
+                                    },
+                                    "required": ["question", "answer"]
+                                },
+                                "description": "List of flashcards to add"
+                            }
+                        },
+                        "required": ["set_id", "flashcards"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_get_set",
+                    "description": "Get a flashcard set by ID",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "set_id": {"type": "string", "description": "The ID of the flashcard set"}
+                        },
+                        "required": ["set_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_get_sets_by_course",
+                    "description": "Get all flashcard sets for a specific course",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_id": {"type": "integer", "description": "The ID of the course"}
+                        },
+                        "required": ["course_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_get_needing_review",
+                    "description": "Get flashcards that need review (not mastered)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "set_id": {"type": "string", "description": "The ID of the flashcard set"},
+                            "limit": {"type": "integer", "description": "Maximum number of flashcards to return"}
+                        },
+                        "required": ["set_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_record_review",
+                    "description": "Record a flashcard review (correct or incorrect)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "set_id": {"type": "string", "description": "The ID of the flashcard set"},
+                            "flashcard_id": {"type": "string", "description": "The ID of the flashcard"},
+                            "correct": {"type": "boolean", "description": "Whether the student got it correct"}
+                        },
+                        "required": ["set_id", "flashcard_id", "correct"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_get_progress",
+                    "description": "Get progress statistics for a flashcard set",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "set_id": {"type": "string", "description": "The ID of the flashcard set"}
+                        },
+                        "required": ["set_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_get_all_sets",
+                    "description": "Get all flashcard sets",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "flashcard_generate",
+                    "description": "Generate flashcards using AI from course context and student notes. Returns a list of flashcards that can be added to a set.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "course_context": {
+                                "type": "string",
+                                "description": "Course materials, assignment details, modules, pages, etc. to generate flashcards from"
+                            },
+                            "student_notes": {
+                                "type": "string",
+                                "description": "Optional student notes to include in flashcard generation"
+                            },
+                            "assignment_context": {
+                                "type": "string",
+                                "description": "Optional assignment-specific context (rubric, requirements, etc.)"
+                            },
+                            "num_flashcards": {
+                                "type": "integer",
+                                "description": "Number of flashcards to generate (default: 5, max: 10 for speed)",
+                                "default": 5
+                            }
+                        },
+                        "required": ["course_context"]
                     }
                 }
             }

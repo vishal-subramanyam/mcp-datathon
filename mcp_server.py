@@ -114,6 +114,128 @@ def build_daily_briefing() -> str:
         briefing += f"• {a['course']}: {a['title']} (Due: {a['due_date']}, Points: {a['points']})\n"
     return briefing
 
+def get_assignment_details(course_id: int, assignment_id: int) -> dict:
+    """Get detailed information about a specific assignment."""
+    canvas = get_canvas_client()
+    try:
+        course = canvas.get_course(course_id)
+        assignment = course.get_assignment(assignment_id)
+        
+        return {
+            "id": assignment.id,
+            "name": assignment.name,
+            "course_id": course_id,
+            "course_name": course.name,
+            "description": assignment.description or "",
+            "due_at": assignment.due_at,
+            "points_possible": assignment.points_possible,
+            "submission_types": assignment.submission_types,
+            "html_url": assignment.html_url,
+            "rubric": getattr(assignment, 'rubric', None),
+            "lock_at": assignment.lock_at,
+            "unlock_at": assignment.unlock_at
+        }
+    except CanvasException as e:
+        raise Exception(f"Error fetching assignment: {str(e)}")
+
+def get_course_modules(course_id: int) -> List[dict]:
+    """Get all modules for a course."""
+    canvas = get_canvas_client()
+    try:
+        course = canvas.get_course(course_id)
+        modules = []
+        for module in course.get_modules():
+            module_items = []
+            try:
+                for item in module.get_module_items():
+                    module_items.append({
+                        "id": item.id,
+                        "title": item.title,
+                        "type": item.type,
+                        "content_id": getattr(item, 'content_id', None),
+                        "html_url": getattr(item, 'html_url', None)
+                    })
+            except:
+                pass
+            
+            modules.append({
+                "id": module.id,
+                "name": module.name,
+                "position": module.position,
+                "items": module_items
+            })
+        return modules
+    except CanvasException as e:
+        raise Exception(f"Error fetching modules: {str(e)}")
+
+def get_course_files(course_id: int) -> List[dict]:
+    """Get all files for a course."""
+    canvas = get_canvas_client()
+    try:
+        course = canvas.get_course(course_id)
+        files = []
+        for file in course.get_files():
+            files.append({
+                "id": file.id,
+                "display_name": file.display_name,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size": file.size,
+                "url": file.url,
+                "created_at": file.created_at,
+                "updated_at": file.updated_at
+            })
+        return files
+    except CanvasException as e:
+        raise Exception(f"Error fetching files: {str(e)}")
+
+def get_course_pages(course_id: int) -> List[dict]:
+    """Get all pages for a course."""
+    canvas = get_canvas_client()
+    try:
+        course = canvas.get_course(course_id)
+        pages = []
+        for page in course.get_pages():
+            pages.append({
+                "url": page.url,
+                "title": page.title,
+                "created_at": page.created_at,
+                "updated_at": page.updated_at,
+                "published": page.published,
+                "html_url": page.html_url
+            })
+        return pages
+    except CanvasException as e:
+        raise Exception(f"Error fetching pages: {str(e)}")
+
+def get_page_content(course_id: int, page_url: str) -> dict:
+    """
+    Get the HTML content of a Canvas page.
+    
+    Args:
+        course_id: The ID of the course
+        page_url: The URL slug of the page
+    
+    Returns:
+        Dictionary with page metadata and HTML content
+    """
+    canvas = get_canvas_client()
+    try:
+        course = canvas.get_course(course_id)
+        page = course.get_page(page_url)
+        
+        return {
+            "url": page.url,
+            "title": page.title,
+            "body": page.body or "",
+            "created_at": page.created_at,
+            "updated_at": page.updated_at,
+            "published": page.published,
+            "html_url": page.html_url
+        }
+    except CanvasException as e:
+        raise Exception(f"Error fetching page content: {str(e)}")
+
 def create_assignment(
     course_id: int,
     name: str,
@@ -485,6 +607,84 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["name"]
             }
+        ),
+        Tool(
+            name="get_assignment_details",
+            description="Get detailed information about a specific assignment including description and rubric",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "integer",
+                        "description": "The ID of the course containing the assignment"
+                    },
+                    "assignment_id": {
+                        "type": "integer",
+                        "description": "The ID of the assignment to retrieve"
+                    }
+                },
+                "required": ["course_id", "assignment_id"]
+            }
+        ),
+        Tool(
+            name="get_course_modules",
+            description="Get all modules and module items for a course",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "integer",
+                        "description": "The ID of the course"
+                    }
+                },
+                "required": ["course_id"]
+            }
+        ),
+        Tool(
+            name="get_course_files",
+            description="Get all files for a course",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "integer",
+                        "description": "The ID of the course"
+                    }
+                },
+                "required": ["course_id"]
+            }
+        ),
+        Tool(
+            name="get_course_pages",
+            description="Get all pages for a course",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "integer",
+                        "description": "The ID of the course"
+                    }
+                },
+                "required": ["course_id"]
+            }
+        ),
+        Tool(
+            name="get_page_content",
+            description="Get the HTML/text content of a Canvas page",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "integer",
+                        "description": "The ID of the course"
+                    },
+                    "page_url": {
+                        "type": "string",
+                        "description": "The URL slug of the page (e.g., 'syllabus' or 'welcome')"
+                    }
+                },
+                "required": ["course_id", "page_url"]
+            }
         )
     ]
 
@@ -785,6 +985,149 @@ async def call_tool(name: str, arguments: Optional[dict[str, Any]]) -> list[Text
                         type="text",
                         text=f"Error creating course: {error_msg}"
                     )]
+        
+        elif name == "get_assignment_details":
+            course_id = arguments.get("course_id")
+            assignment_id = arguments.get("assignment_id")
+            
+            if not course_id or not assignment_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: 'course_id' and 'assignment_id' are required."
+                )]
+            
+            try:
+                details = get_assignment_details(course_id, assignment_id)
+                formatted = "Assignment Details:\n\n"
+                formatted += f"Name: {details['name']}\n"
+                formatted += f"Course: {details['course_name']}\n"
+                formatted += f"Due Date: {details['due_at']}\n"
+                formatted += f"Points: {details['points_possible']}\n"
+                if details['description']:
+                    formatted += f"\nDescription:\n{details['description'][:500]}...\n" if len(details['description']) > 500 else f"\nDescription:\n{details['description']}\n"
+                formatted += f"\nURL: {details['html_url']}\n"
+                return [TextContent(type="text", text=formatted)]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Error fetching assignment details: {str(e)}"
+                )]
+        
+        elif name == "get_course_modules":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: 'course_id' is required."
+                )]
+            
+            try:
+                modules = get_course_modules(course_id)
+                if not modules:
+                    return [TextContent(
+                        type="text",
+                        text=f"No modules found for course {course_id}."
+                    )]
+                
+                formatted = f"Course Modules ({len(modules)}):\n\n"
+                for module in modules:
+                    formatted += f"Module: {module['name']}\n"
+                    formatted += f"  Items: {len(module['items'])}\n"
+                    for item in module['items'][:5]:  # Show first 5 items
+                        formatted += f"    - {item['title']} ({item['type']})\n"
+                    if len(module['items']) > 5:
+                        formatted += f"    ... and {len(module['items']) - 5} more items\n"
+                    formatted += "\n"
+                return [TextContent(type="text", text=formatted)]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Error fetching course modules: {str(e)}"
+                )]
+        
+        elif name == "get_course_files":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: 'course_id' is required."
+                )]
+            
+            try:
+                files = get_course_files(course_id)
+                if not files:
+                    return [TextContent(
+                        type="text",
+                        text=f"No files found for course {course_id}."
+                    )]
+                
+                formatted = f"Course Files ({len(files)}):\n\n"
+                for file in files[:10]:  # Show first 10 files
+                    formatted += f"• {file['display_name']} ({file['content_type']}, {file['size']} bytes)\n"
+                if len(files) > 10:
+                    formatted += f"\n... and {len(files) - 10} more files\n"
+                return [TextContent(type="text", text=formatted)]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Error fetching course files: {str(e)}"
+                )]
+        
+        elif name == "get_course_pages":
+            course_id = arguments.get("course_id")
+            if not course_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: 'course_id' is required."
+                )]
+            
+            try:
+                pages = get_course_pages(course_id)
+                if not pages:
+                    return [TextContent(
+                        type="text",
+                        text=f"No pages found for course {course_id}."
+                    )]
+                
+                formatted = f"Course Pages ({len(pages)}):\n\n"
+                for page in pages:
+                    formatted += f"• {page['title']} ({'Published' if page['published'] else 'Unpublished'})\n"
+                return [TextContent(type="text", text=formatted)]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Error fetching course pages: {str(e)}"
+                )]
+        
+        elif name == "get_page_content":
+            course_id = arguments.get("course_id")
+            page_url = arguments.get("page_url")
+            
+            if not course_id or not page_url:
+                return [TextContent(
+                    type="text",
+                    text="Error: 'course_id' and 'page_url' are required."
+                )]
+            
+            try:
+                page_content = get_page_content(course_id, page_url)
+                formatted = f"Page: {page_content['title']}\n\n"
+                formatted += f"URL: {page_content['url']}\n"
+                formatted += f"Published: {page_content['published']}\n\n"
+                
+                # Show page body (first 2000 characters)
+                body_text = page_content['body']
+                if len(body_text) > 2000:
+                    body_text = body_text[:2000] + f"\n\n... (showing first 2000 of {len(page_content['body'])} characters)"
+                
+                formatted += f"Content:\n{body_text}"
+                
+                return [TextContent(type="text", text=formatted)]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Error fetching page content: {str(e)}"
+                )]
         
         else:
             return [TextContent(

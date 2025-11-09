@@ -140,6 +140,9 @@ calendar_token.json
 credentials.json
 *.credentials.json
 
+# Flashcard data
+flashcard_data/
+
 # Streamlit
 .streamlit/
 
