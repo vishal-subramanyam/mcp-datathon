@@ -4,9 +4,16 @@ Main application entry point.
 """
 import streamlit as st
 import os
+import sys
+from pathlib import Path
 
-# Import pages
-from frontend.utils.api import check_backend_connection, send_message
+# Add project root to path to fix imports
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Import using relative import (works in Streamlit Cloud)
+from utils.api import check_backend_connection, send_message
 
 # Configure page
 st.set_page_config(
