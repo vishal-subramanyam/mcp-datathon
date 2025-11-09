@@ -407,6 +407,54 @@
       "total_reviews": 0,
       "mastered_count": 0,
       "needs_review_count": 0
+    },
+    "7ab9b6fa-6d66-4937-9171-d705b2639deb": {
+      "flashcard_reviews": {
+        "cd1612c7-ed32-4856-bde6-1a4c13f0f66d": {
+          "times_reviewed": 0,
+          "times_correct": 0,
+          "times_incorrect": 0,
+          "last_reviewed": null,
+          "mastered": false,
+          "difficulty": "medium"
+        },
+        "c60789fd-f17d-47f6-aef1-e0a0dbe8ad10": {
+          "times_reviewed": 0,
+          "times_correct": 0,
+          "times_incorrect": 0,
+          "last_reviewed": null,
+          "mastered": false,
+          "difficulty": "medium"
+        },
+        "8cc75bf2-20dd-4d4c-a671-6bc036bb916f": {
+          "times_reviewed": 0,
+          "times_correct": 0,
+          "times_incorrect": 0,
+          "last_reviewed": null,
+          "mastered": false,
+          "difficulty": "medium"
+        },
+        "d8734337-f81f-43e4-834f-ff0c9a539687": {
+          "times_reviewed": 0,
+          "times_correct": 0,
+          "times_incorrect": 0,
+          "last_reviewed": null,
+          "mastered": false,
+          "difficulty": "medium"
+        },
+        "6912fc40-dbf5-474b-b956-23ae2242a628": {
+          "times_reviewed": 0,
+          "times_correct": 0,
+          "times_incorrect": 0,
+          "last_reviewed": null,
+          "mastered": false,
+          "difficulty": "medium"
+        }
+      },
+      "last_reviewed": null,
+      "total_reviews": 0,
+      "mastered_count": 0,
+      "needs_review_count": 0
     }
   }
 }

@@ -344,6 +344,53 @@
       ],
       "created_at": "2025-11-09T10:16:40.072410+00:00",
       "updated_at": "2025-11-09T10:17:09.328529+00:00"
+    },
+    {
+      "id": "7ab9b6fa-6d66-4937-9171-d705b2639deb",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": null,
+      "flashcards": [
+        {
+          "question": "What are the three basic tables used by the Unix kernel to manage open files?",
+          "answer": "Descriptor Table (DT), File Table (FT), and v-node Table (vT)",
+          "tags": [],
+          "id": "cd1612c7-ed32-4856-bde6-1a4c13f0f66d",
+          "created_at": "2025-11-09T07:09:19.884395"
+        },
+        {
+          "question": "What are the default file descriptors that every new process starts with?",
+          "answer": "0: standard input (stdin), 1: standard output (stdout), and 2: standard error (stderr)",
+          "tags": [],
+          "id": "c60789fd-f17d-47f6-aef1-e0a0dbe8ad10",
+          "created_at": "2025-11-09T07:09:19.911917"
+        },
+        {
+          "question": "What are the four basic UNIX I/O system calls?",
+          "answer": "open(), close(), read(), and write()",
+          "tags": [],
+          "id": "8cc75bf2-20dd-4d4c-a671-6bc036bb916f",
+          "created_at": "2025-11-09T07:09:19.938017"
+        },
+        {
+          "question": "What are the main types of files in Unix?",
+          "answer": "Regular files, Directory files, Character special files, Block special files, FIFO (named pipe), and Socket files",
+          "tags": [],
+          "id": "d8734337-f81f-43e4-834f-ff0c9a539687",
+          "created_at": "2025-11-09T07:09:19.961623"
+        },
+        {
+          "question": "What happens when read() reaches the end of a file?",
+          "answer": "It returns 0 (EOF - End Of File)",
+          "tags": [],
+          "id": "6912fc40-dbf5-474b-b956-23ae2242a628",
+          "created_at": "2025-11-09T07:09:19.981655"
+        }
+      ],
+      "created_at": "2025-11-09T07:09:05.618750",
+      "updated_at": "2025-11-09T07:09:20.003524"
     }
   ]
 }

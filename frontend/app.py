@@ -26,6 +26,16 @@ st.set_page_config(
 # Get API URL from environment
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
+# Check for OAuth success redirect
+query_params = st.query_params
+if query_params.get("oauth_success") == "true":
+    user_id_from_oauth = query_params.get("user_id", "")
+    if user_id_from_oauth:
+        st.session_state.user_id = user_id_from_oauth
+        st.success(f"✅ Google account linked successfully!")
+        # Clear query params
+        st.query_params.clear()
+
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []

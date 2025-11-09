@@ -1554,7 +1554,7 @@ class MCPService:
     async def _call_calendar_tool(tool_name: str, arguments: Dict[str, Any], credentials: Optional[Dict[str, Any]] = None) -> str:
         """Call a Calendar tool."""
         if tool_name == "list_calendars":
-            calendars = list_calendars()
+            calendars = list_calendars(credentials=credentials)
             if not calendars:
                 return "No calendars found."
             formatted = f"Found {len(calendars)} calendar(s):\n\n"
@@ -1571,7 +1571,8 @@ class MCPService:
                 time_min=arguments.get("time_min"),
                 time_max=arguments.get("time_max"),
                 max_results=arguments.get("max_results", 10),
-                query=arguments.get("query")
+                query=arguments.get("query"),
+                credentials=credentials
             )
             if not events:
                 return f"No events found in calendar '{calendar_id}'."
@@ -1588,7 +1589,7 @@ class MCPService:
             event_id = arguments.get("event_id")
             if not event_id:
                 return "Error: 'event_id' is required."
-            event = get_event(calendar_id, event_id)
+            event = get_event(calendar_id, event_id, credentials=credentials)
             parsed = parse_event(event)
             formatted = "Event Details:\n\n"
             formatted += f"Title: {parsed['summary']}\n"
@@ -1613,7 +1614,8 @@ class MCPService:
                 attendees=arguments.get("attendees"),
                 calendar_id=arguments.get("calendar_id", "primary"),
                 timezone=arguments.get("timezone", "UTC"),
-                all_day=arguments.get("all_day", False)
+                all_day=arguments.get("all_day", False),
+                credentials=credentials
             )
             parsed = parse_event(event)
             formatted = "✅ Event created successfully!\n\n"
@@ -1637,7 +1639,8 @@ class MCPService:
                 end_time=arguments.get("end_time"),
                 location=arguments.get("location"),
                 attendees=arguments.get("attendees"),
-                timezone=arguments.get("timezone", "UTC")
+                timezone=arguments.get("timezone", "UTC"),
+                credentials=credentials
             )
             parsed = parse_event(event)
             formatted = "✅ Event updated successfully!\n\n"
@@ -1651,7 +1654,7 @@ class MCPService:
             event_id = arguments.get("event_id")
             if not event_id:
                 return "Error: 'event_id' is required."
-            delete_event(calendar_id, event_id)
+            delete_event(calendar_id, event_id, credentials=credentials)
             return f"✅ Event {event_id} deleted successfully."
         
         else:
@@ -1663,13 +1666,13 @@ class MCPService:
         if tool_name == "list_emails":
             query = arguments.get("query", "")
             max_results = arguments.get("max_results", 10)
-            messages = list_messages(query=query, max_results=max_results)
+            messages = list_messages(query=query, max_results=max_results, credentials=credentials)
             if not messages:
                 return "No emails found."
             email_list = []
             for msg in messages:
                 try:
-                    message_detail = get_message(msg['id'])
+                    message_detail = get_message(msg['id'], credentials=credentials)
                     parsed = parse_message(message_detail)
                     email_list.append(parsed)
                 except Exception:
@@ -1685,7 +1688,7 @@ class MCPService:
             message_id = arguments.get("message_id")
             if not message_id:
                 return "Error: 'message_id' is required."
-            message = get_message(message_id)
+            message = get_message(message_id, credentials=credentials)
             parsed = parse_message(message)
             formatted = "Email Details:\n\n"
             formatted += f"Subject: {parsed['subject']}\n"
@@ -1707,7 +1710,8 @@ class MCPService:
                 body=body,
                 body_type=arguments.get("body_type", "plain"),
                 cc=arguments.get("cc"),
-                bcc=arguments.get("bcc")
+                bcc=arguments.get("bcc"),
+                credentials=credentials
             )
             formatted = "✅ Email sent successfully!\n\n"
             formatted += f"To: {to}\n"
@@ -1719,21 +1723,21 @@ class MCPService:
             message_id = arguments.get("message_id")
             if not message_id:
                 return "Error: 'message_id' is required."
-            mark_as_read(message_id)
+            mark_as_read(message_id, credentials=credentials)
             return f"✅ Email {message_id} marked as read."
         
         elif tool_name == "mark_email_unread":
             message_id = arguments.get("message_id")
             if not message_id:
                 return "Error: 'message_id' is required."
-            mark_as_unread(message_id)
+            mark_as_unread(message_id, credentials=credentials)
             return f"✅ Email {message_id} marked as unread."
         
         elif tool_name == "delete_email":
             message_id = arguments.get("message_id")
             if not message_id:
                 return "Error: 'message_id' is required."
-            delete_message(message_id)
+            delete_message(message_id, credentials=credentials)
             return f"✅ Email {message_id} deleted successfully."
         
         elif tool_name == "search_emails":
@@ -1752,13 +1756,13 @@ class MCPService:
                 query_parts.append("is:starred")
             query = " ".join(query_parts)
             max_results = arguments.get("max_results", 10)
-            messages = list_messages(query=query, max_results=max_results)
+            messages = list_messages(query=query, max_results=max_results, credentials=credentials)
             if not messages:
                 return "No emails found matching the search criteria."
             email_list = []
             for msg in messages:
                 try:
-                    message_detail = get_message(msg['id'])
+                    message_detail = get_message(msg['id'], credentials=credentials)
                     parsed = parse_message(message_detail)
                     email_list.append(parsed)
                 except Exception:

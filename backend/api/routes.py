@@ -4,15 +4,32 @@ Handles chat requests, tool execution, and authentication.
 """
 import os
 from fastapi import APIRouter, HTTPException, Header
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
 import json
+import secrets
 
 from backend.services.mcp_service import MCPService
 from backend.services.auth_service import AuthService
 
 router = APIRouter()
+
+# Google OAuth configuration
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+
+# Combined scopes for Gmail + Calendar
+GOOGLE_SCOPES = [
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/calendar'
+]
+
+# Store OAuth state temporarily (in production, use Redis or database)
+# Format: {state: {"user_id": str, "timestamp": float}}
+oauth_states: Dict[str, Dict[str, Any]] = {}
 
 # OpenRouter configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -298,4 +315,199 @@ async def delete_credentials(user_id: str, service: str):
         return {"message": "Credentials deleted successfully"}
     else:
         raise HTTPException(status_code=500, detail="Failed to delete credentials")
+
+
+@router.get("/auth/google/authorize")
+async def google_authorize(user_id: str):
+    """
+    Initiate Google OAuth flow.
+    Redirects user to Google consent screen.
+    
+    Args:
+        user_id: User's unique identifier
+    """
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
+        )
+    
+    if not GOOGLE_REDIRECT_URI:
+        raise HTTPException(
+            status_code=500,
+            detail="GOOGLE_REDIRECT_URI not configured. Please set it in environment variables."
+        )
+    
+    try:
+        from google_auth_oauthlib.flow import Flow
+        import time
+        
+        # Generate state for CSRF protection
+        state = secrets.token_urlsafe(32)
+        oauth_states[state] = {
+            "user_id": user_id,
+            "timestamp": time.time()
+        }
+        
+        # Clean up old states (older than 10 minutes)
+        current_time = time.time()
+        oauth_states.clear()  # Simple cleanup - in production use TTL-based storage
+        oauth_states[state] = {
+            "user_id": user_id,
+            "timestamp": current_time
+        }
+        
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [GOOGLE_REDIRECT_URI]
+                }
+            },
+            scopes=GOOGLE_SCOPES
+        )
+        flow.redirect_uri = GOOGLE_REDIRECT_URI
+        
+        # Generate authorization URL
+        authorization_url, _ = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent',
+            state=state
+        )
+        
+        return RedirectResponse(url=authorization_url)
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth libraries not installed. Please install google-auth-oauthlib."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initiate OAuth flow: {str(e)}"
+        )
+
+
+@router.get("/auth/google/callback")
+async def google_callback(code: str, state: str):
+    """
+    Handle Google OAuth callback.
+    Exchanges authorization code for tokens and stores them.
+    
+    Args:
+        code: Authorization code from Google
+        state: State parameter for CSRF protection
+    """
+    import time
+    
+    # Validate state
+    if state not in oauth_states:
+        raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
+    
+    state_data = oauth_states.pop(state)
+    user_id = state_data.get("user_id")
+    
+    # Check if state is too old (more than 10 minutes)
+    if time.time() - state_data.get("timestamp", 0) > 600:
+        raise HTTPException(status_code=400, detail="OAuth state expired")
+    
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth not configured"
+        )
+    
+    if not GOOGLE_REDIRECT_URI:
+        raise HTTPException(
+            status_code=500,
+            detail="GOOGLE_REDIRECT_URI not configured"
+        )
+    
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from googleapiclient.discovery import build
+        
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [GOOGLE_REDIRECT_URI]
+                }
+            },
+            scopes=GOOGLE_SCOPES
+        )
+        flow.redirect_uri = GOOGLE_REDIRECT_URI
+        
+        # Exchange code for tokens
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        
+        # Get user email from Google
+        try:
+            oauth2_service = build('oauth2', 'v2', credentials=credentials)
+            user_info = oauth2_service.userinfo().get().execute()
+            user_email = user_info.get('email')
+            
+            # Use email as user_id if not provided
+            if not user_id and user_email:
+                user_id = user_email
+        except Exception as e:
+            print(f"Warning: Could not fetch user email: {e}")
+            # Continue without email
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="User ID is required. Please provide user_id in the authorization request."
+            )
+        
+        # Convert credentials to dict for storage
+        creds_dict = {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": list(credentials.scopes) if credentials.scopes else GOOGLE_SCOPES
+        }
+        
+        # Store credentials for both Gmail and Calendar
+        # (Same credentials work for both since we requested both scopes)
+        gmail_success = await AuthService.store_user_credentials(
+            user_id, "google_gmail", creds_dict
+        )
+        calendar_success = await AuthService.store_user_credentials(
+            user_id, "google_calendar", creds_dict
+        )
+        
+        if gmail_success and calendar_success:
+            # Redirect back to frontend with success
+            frontend_url = os.getenv("FRONTEND_URL", os.getenv("STREAMLIT_URL", "http://localhost:8501"))
+            return RedirectResponse(
+                url=f"{frontend_url}/?oauth_success=true&user_id={user_id}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to store credentials"
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth libraries not installed"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OAuth callback error: {str(e)}"
+        )
 

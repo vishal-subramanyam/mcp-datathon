@@ -37,8 +37,31 @@ _gmail_service: Any = None
 # -----------------------------
 # AUTHENTICATION
 # -----------------------------
-def get_gmail_service():
-    """Get or create the Gmail service. Initializes lazily to ensure credentials are available."""
+def get_gmail_service(credentials: Optional[Dict[str, Any]] = None):
+    """Get or create the Gmail service. Initializes lazily to ensure credentials are available.
+    
+    Args:
+        credentials: Optional credentials dictionary from Supabase. If provided, uses these
+                     instead of file-based credentials.
+    """
+    # If credentials are provided, use them directly (don't cache globally for per-user auth)
+    if credentials:
+        try:
+            creds = Credentials.from_authorized_user_info(credentials, SCOPES)
+            
+            # Refresh if expired
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            
+            # Build service with these credentials
+            return build('gmail', 'v1', credentials=creds)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to initialize Gmail service with provided credentials: {str(e)}. "
+                "Please check your credentials are valid."
+            )
+    
+    # Otherwise, use file-based authentication (existing behavior)
     global _gmail_service
     
     if _gmail_service is not None:
@@ -97,7 +120,7 @@ app = Server("gmail-mcp-server")
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
-def list_messages(query: str = '', max_results: int = 10, user_id: str = 'me') -> List[Dict[str, Any]]:
+def list_messages(query: str = '', max_results: int = 10, user_id: str = 'me', credentials: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
     List messages matching the query.
     
@@ -105,11 +128,12 @@ def list_messages(query: str = '', max_results: int = 10, user_id: str = 'me') -
         query: Gmail search query (e.g., 'is:unread', 'from:example@gmail.com', 'subject:test')
         max_results: Maximum number of messages to return
         user_id: User's email address or 'me' for authenticated user
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         List of message dictionaries with id, threadId
     """
-    service = get_gmail_service()
+    service = get_gmail_service(credentials)
     try:
         response = service.users().messages().list(
             userId=user_id,
@@ -124,7 +148,7 @@ def list_messages(query: str = '', max_results: int = 10, user_id: str = 'me') -
     except HttpError as error:
         raise Exception(f"An error occurred while listing messages: {error}")
 
-def get_message(message_id: str, user_id: str = 'me', format: str = 'full') -> Dict[str, Any]:
+def get_message(message_id: str, user_id: str = 'me', format: str = 'full', credentials: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Get a message by ID.
     
@@ -132,11 +156,12 @@ def get_message(message_id: str, user_id: str = 'me', format: str = 'full') -> D
         message_id: The ID of the message
         user_id: User's email address or 'me' for authenticated user
         format: Format of the message ('full', 'metadata', 'minimal', 'raw')
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         Message dictionary with full details
     """
-    service = get_gmail_service()
+    service = get_gmail_service(credentials)
     try:
         message = service.users().messages().get(
             userId=user_id,
@@ -208,7 +233,8 @@ def send_message(
     body_type: str = 'plain',
     cc: Optional[str] = None,
     bcc: Optional[str] = None,
-    user_id: str = 'me'
+    user_id: str = 'me',
+    credentials: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Send an email message.
@@ -221,11 +247,12 @@ def send_message(
         cc: CC email address (optional)
         bcc: BCC email address (optional)
         user_id: User's email address or 'me' for authenticated user
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         Dictionary with message ID and thread ID
     """
-    service = get_gmail_service()
+    service = get_gmail_service(credentials)
     try:
         message = MIMEText(body, body_type)
         message['to'] = to
@@ -252,9 +279,15 @@ def send_message(
     except HttpError as error:
         raise Exception(f"An error occurred while sending message: {error}")
 
-def mark_as_read(message_id: str, user_id: str = 'me') -> bool:
-    """Mark a message as read."""
-    service = get_gmail_service()
+def mark_as_read(message_id: str, user_id: str = 'me', credentials: Optional[Dict[str, Any]] = None) -> bool:
+    """Mark a message as read.
+    
+    Args:
+        message_id: The ID of the message
+        user_id: User's email address or 'me' for authenticated user
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_gmail_service(credentials)
     try:
         service.users().messages().modify(
             userId=user_id,
@@ -265,9 +298,15 @@ def mark_as_read(message_id: str, user_id: str = 'me') -> bool:
     except HttpError as error:
         raise Exception(f"An error occurred while marking message as read: {error}")
 
-def mark_as_unread(message_id: str, user_id: str = 'me') -> bool:
-    """Mark a message as unread."""
-    service = get_gmail_service()
+def mark_as_unread(message_id: str, user_id: str = 'me', credentials: Optional[Dict[str, Any]] = None) -> bool:
+    """Mark a message as unread.
+    
+    Args:
+        message_id: The ID of the message
+        user_id: User's email address or 'me' for authenticated user
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_gmail_service(credentials)
     try:
         service.users().messages().modify(
             userId=user_id,
@@ -278,9 +317,15 @@ def mark_as_unread(message_id: str, user_id: str = 'me') -> bool:
     except HttpError as error:
         raise Exception(f"An error occurred while marking message as unread: {error}")
 
-def delete_message(message_id: str, user_id: str = 'me') -> bool:
-    """Delete a message."""
-    service = get_gmail_service()
+def delete_message(message_id: str, user_id: str = 'me', credentials: Optional[Dict[str, Any]] = None) -> bool:
+    """Delete a message.
+    
+    Args:
+        message_id: The ID of the message
+        user_id: User's email address or 'me' for authenticated user
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_gmail_service(credentials)
     try:
         service.users().messages().delete(userId=user_id, id=message_id).execute()
         return True

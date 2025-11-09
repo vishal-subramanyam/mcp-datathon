@@ -32,8 +32,31 @@ _calendar_service: Any = None
 # -----------------------------
 # AUTHENTICATION
 # -----------------------------
-def get_calendar_service():
-    """Get or create the Calendar service. Initializes lazily to ensure credentials are available."""
+def get_calendar_service(credentials: Optional[Dict[str, Any]] = None):
+    """Get or create the Calendar service. Initializes lazily to ensure credentials are available.
+    
+    Args:
+        credentials: Optional credentials dictionary from Supabase. If provided, uses these
+                     instead of file-based credentials.
+    """
+    # If credentials are provided, use them directly (don't cache globally for per-user auth)
+    if credentials:
+        try:
+            creds = Credentials.from_authorized_user_info(credentials, SCOPES)
+            
+            # Refresh if expired
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            
+            # Build service with these credentials
+            return build('calendar', 'v3', credentials=creds)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to initialize Calendar service with provided credentials: {str(e)}. "
+                "Please check your credentials are valid."
+            )
+    
+    # Otherwise, use file-based authentication (existing behavior)
     global _calendar_service
     
     if _calendar_service is not None:
@@ -92,9 +115,13 @@ app = Server("calendar-mcp-server")
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
-def list_calendars() -> List[Dict[str, Any]]:
-    """List all calendars for the user."""
-    service = get_calendar_service()
+def list_calendars(credentials: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """List all calendars for the user.
+    
+    Args:
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_calendar_service(credentials)
     try:
         calendar_list = service.calendarList().list().execute()
         calendars = []
@@ -118,7 +145,8 @@ def get_calendar_events(
     max_results: int = 10,
     query: Optional[str] = None,
     single_events: bool = True,
-    order_by: str = 'startTime'
+    order_by: str = 'startTime',
+    credentials: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     List events from a calendar.
@@ -131,11 +159,12 @@ def get_calendar_events(
         query: Free text search terms
         single_events: Whether to expand recurring events into instances
         order_by: Order of events ('startTime' or 'updated')
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         List of event dictionaries
     """
-    service = get_calendar_service()
+    service = get_calendar_service(credentials)
     try:
         events_result = service.events().list(
             calendarId=calendar_id,
@@ -152,9 +181,15 @@ def get_calendar_events(
     except HttpError as error:
         raise Exception(f"An error occurred while listing events: {error}")
 
-def get_event(calendar_id: str, event_id: str) -> Dict[str, Any]:
-    """Get a specific event by ID."""
-    service = get_calendar_service()
+def get_event(calendar_id: str, event_id: str, credentials: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Get a specific event by ID.
+    
+    Args:
+        calendar_id: Calendar ID
+        event_id: Event ID
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_calendar_service(credentials)
     try:
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
         return event
@@ -172,7 +207,8 @@ def create_event(
     attendees: Optional[List[str]] = None,
     calendar_id: str = 'primary',
     timezone: str = 'UTC',
-    all_day: bool = False
+    all_day: bool = False,
+    credentials: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Create a new calendar event.
@@ -189,11 +225,12 @@ def create_event(
         calendar_id: Calendar ID (default: 'primary')
         timezone: Timezone (default: 'UTC')
         all_day: Whether this is an all-day event
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         Created event dictionary
     """
-    service = get_calendar_service()
+    service = get_calendar_service(credentials)
     
     # Build event body
     event = {
@@ -271,7 +308,8 @@ def update_event(
     end_time: Optional[str] = None,
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
-    timezone: str = 'UTC'
+    timezone: str = 'UTC',
+    credentials: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Update an existing calendar event.
@@ -286,11 +324,12 @@ def update_event(
         location: New location
         attendees: New list of attendee email addresses
         timezone: Timezone (default: 'UTC')
+        credentials: Optional credentials dictionary from Supabase
     
     Returns:
         Updated event dictionary
     """
-    service = get_calendar_service()
+    service = get_calendar_service(credentials)
     
     # Get the existing event
     try:
@@ -343,9 +382,15 @@ def update_event(
     except HttpError as error:
         raise Exception(f"An error occurred while updating event: {error}")
 
-def delete_event(calendar_id: str, event_id: str) -> bool:
-    """Delete a calendar event."""
-    service = get_calendar_service()
+def delete_event(calendar_id: str, event_id: str, credentials: Optional[Dict[str, Any]] = None) -> bool:
+    """Delete a calendar event.
+    
+    Args:
+        calendar_id: Calendar ID
+        event_id: Event ID to delete
+        credentials: Optional credentials dictionary from Supabase
+    """
+    service = get_calendar_service(credentials)
     try:
         service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
         return True
