@@ -42,6 +42,11 @@ USER_TIMEZONE=America/New_York
 # Supabase (optional - for authentication)
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
+
+# Google OAuth (for Gmail and Calendar integration)
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 ```
 
 ### Option B: Use Environment-Specific Files

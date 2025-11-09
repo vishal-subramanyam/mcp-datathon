@@ -373,10 +373,15 @@ async def google_authorize(user_id: str):
         flow.redirect_uri = GOOGLE_REDIRECT_URI
         
         # Generate authorization URL
+        # Use 'select_account' for better UX (user chooses account)
+        # Use 'consent' to force consent screen (useful for testing or re-auth)
+        # For production, 'select_account' provides better user experience
+        prompt_type = os.getenv("GOOGLE_OAUTH_PROMPT", "select_account")
+        
         authorization_url, _ = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent',
+            prompt=prompt_type,  # 'select_account' or 'consent'
             state=state
         )
         

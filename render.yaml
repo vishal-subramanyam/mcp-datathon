@@ -49,7 +49,24 @@ services:
       - key: CANVAS_API_KEY
         sync: false
       
-      # Google API paths (if using default credentials)
+      # Google OAuth (REQUIRED for Google account connection)
+      # Add these via Render Dashboard - keep secret
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      
+      - key: GOOGLE_REDIRECT_URI
+        value: https://canvas-mpc-backend.onrender.com/auth/google/callback
+      
+      # Optional: Control OAuth prompt behavior
+      # 'select_account' for better UX (default)
+      # 'consent' to force consent screen every time
+      - key: GOOGLE_OAUTH_PROMPT
+        value: select_account
+      
+      # Google API paths (if using default credentials - fallback only)
       - key: CALENDAR_CREDENTIALS_PATH
         value: /etc/secrets/credentials.json
       
