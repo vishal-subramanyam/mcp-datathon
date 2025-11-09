@@ -3,7 +3,7 @@ API routes for Canvas MPC.
 Handles chat requests, tool execution, and authentication.
 """
 import os
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
@@ -318,7 +318,7 @@ async def delete_credentials(user_id: str, service: str):
 
 
 @router.get("/auth/google/authorize")
-async def google_authorize(user_id: Optional[str] = None):
+async def google_authorize(user_id: Optional[str] = Query(None, description="Optional user's unique identifier. If not provided, will use Google email from OAuth callback.")):
     """
     Initiate Google OAuth flow.
     Redirects user to Google consent screen.
@@ -491,12 +491,16 @@ async def google_callback(code: str, state: str):
         
         # Store credentials for both Gmail and Calendar
         # (Same credentials work for both since we requested both scopes)
+        print(f"Storing credentials for user_id: {user_id}")
         gmail_success = await AuthService.store_user_credentials(
             user_id, "google_gmail", creds_dict
         )
         calendar_success = await AuthService.store_user_credentials(
             user_id, "google_calendar", creds_dict
         )
+        
+        print(f"Gmail credentials stored: {gmail_success}")
+        print(f"Calendar credentials stored: {calendar_success}")
         
         if gmail_success and calendar_success:
             # Redirect back to frontend with success
@@ -505,9 +509,19 @@ async def google_callback(code: str, state: str):
                 url=f"{frontend_url}/?oauth_success=true&user_id={user_id}"
             )
         else:
+            # Provide detailed error message
+            error_msg = "Failed to store credentials in database. "
+            if not gmail_success and not calendar_success:
+                error_msg += "Both Gmail and Calendar credentials failed to save. "
+            elif not gmail_success:
+                error_msg += "Gmail credentials failed to save. "
+            elif not calendar_success:
+                error_msg += "Calendar credentials failed to save. "
+            error_msg += "Please check: 1) Supabase connection (SUPABASE_URL and SUPABASE_KEY), 2) Database schema is created, 3) Backend logs for detailed error messages."
+            
             raise HTTPException(
                 status_code=500,
-                detail="Failed to store credentials"
+                detail=error_msg
             )
     except ImportError:
         raise HTTPException(
@@ -563,4 +577,50 @@ async def get_user_credentials_summary(user_id: str):
             status_code=500,
             detail=f"Failed to get user credentials: {str(e)}"
         )
+
+
+@router.get("/auth/health")
+async def auth_health_check():
+    """
+    Check health of authentication service and database connection.
+    
+    Returns:
+        Health status of Supabase connection
+    """
+    import os
+    from backend.services.auth_service import supabase
+    
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    health_status = {
+        "service": "Authentication Service",
+        "supabase_url_set": bool(supabase_url),
+        "supabase_key_set": bool(supabase_key),
+        "supabase_client_initialized": supabase is not None,
+        "status": "healthy"
+    }
+    
+    # Test database connection if client is initialized
+    if supabase:
+        try:
+            # Try a simple query to test connection
+            response = supabase.table('user_credentials').select('user_id', count='exact').limit(1).execute()
+            health_status["database_connection"] = "connected"
+            health_status["database_test"] = "success"
+        except Exception as e:
+            health_status["database_connection"] = "error"
+            health_status["database_test"] = "failed"
+            health_status["database_error"] = str(e)
+            health_status["status"] = "unhealthy"
+    else:
+        health_status["database_connection"] = "not_initialized"
+        health_status["status"] = "unhealthy"
+        health_status["error"] = "Supabase client not initialized. Check SUPABASE_URL and SUPABASE_KEY environment variables."
+    
+    if not supabase_url or not supabase_key:
+        health_status["status"] = "unhealthy"
+        health_status["error"] = "SUPABASE_URL or SUPABASE_KEY not set in environment variables."
+    
+    return health_status
 

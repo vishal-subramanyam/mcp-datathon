@@ -13,9 +13,17 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("Warning: SUPABASE_URL or SUPABASE_KEY not set. Auth features will be disabled.")
+    print(f"SUPABASE_URL: {'Set' if SUPABASE_URL else 'NOT SET'}")
+    print(f"SUPABASE_KEY: {'Set' if SUPABASE_KEY else 'NOT SET'}")
     supabase: Optional[Client] = None
 else:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f"✅ Supabase client initialized successfully")
+        # Test connection by trying to list tables (this will fail gracefully if connection issues)
+    except Exception as e:
+        print(f"❌ Error initializing Supabase client: {e}")
+        supabase: Optional[Client] = None
 
 
 class AuthService:
@@ -34,6 +42,7 @@ class AuthService:
             Dictionary containing credentials or None if not found
         """
         if not supabase:
+            print("Error: Supabase client not initialized. Check SUPABASE_URL and SUPABASE_KEY environment variables.")
             return None
         
         try:
@@ -56,6 +65,8 @@ class AuthService:
             return None
         except Exception as e:
             print(f"Error fetching credentials: {e}")
+            print(f"  User ID: {user_id}, Service: {service}")
+            print(f"  Supabase URL: {SUPABASE_URL if SUPABASE_URL else 'NOT SET'}")
             return None
     
     @staticmethod
@@ -76,6 +87,7 @@ class AuthService:
             True if successful, False otherwise
         """
         if not supabase:
+            print("Error: Supabase client not initialized. Check SUPABASE_URL and SUPABASE_KEY environment variables.")
             return False
         
         try:
@@ -86,6 +98,7 @@ class AuthService:
             
             if existing:
                 # Update existing credentials
+                print(f"Updating existing credentials for user_id: {user_id}, service: {service}")
                 supabase.table('user_credentials') \
                     .update({'credentials': cred_json}) \
                     .eq('user_id', user_id) \
@@ -93,17 +106,23 @@ class AuthService:
                     .execute()
             else:
                 # Insert new credentials
-                supabase.table('user_credentials') \
+                print(f"Inserting new credentials for user_id: {user_id}, service: {service}")
+                result = supabase.table('user_credentials') \
                     .insert({
                         'user_id': user_id,
                         'service': service,
                         'credentials': cred_json
                     }) \
                     .execute()
+                print(f"Insert result: {result}")
             
             return True
         except Exception as e:
             print(f"Error storing credentials: {e}")
+            print(f"  User ID: {user_id}, Service: {service}")
+            print(f"  Supabase URL: {SUPABASE_URL if SUPABASE_URL else 'NOT SET'}")
+            import traceback
+            traceback.print_exc()
             return False
     
     @staticmethod
