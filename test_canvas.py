@@ -1,14 +1,13 @@
 # filename: mcp_server.py
+# Canvas MCP Server using FastMCP
 
 import os
-import asyncio
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from fastmcp import FastMCP
 from canvasapi import Canvas
 from canvasapi.exceptions import CanvasException
 from datetime import datetime, timedelta, timezone
-from typing import List, Any, Optional
+from typing import List, Optional
+from functools import wraps
 
 # -----------------------------
 # CONFIGURATION
@@ -58,9 +57,36 @@ def get_canvas_client() -> Canvas:
         )
 
 # -----------------------------
-# MCP SERVER
+# FASTMCP SERVER
 # -----------------------------
-app = Server("canvas-mcp-server")
+mcp = FastMCP("canvas-mcp-server")
+
+# -----------------------------
+# ERROR HANDLING HELPER
+# -----------------------------
+def handle_canvas_errors(func):
+    """Decorator to handle Canvas API errors consistently."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except CanvasException as e:
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg or "authentication" in error_msg.lower():
+                return (
+                    f"Canvas Authentication Error: {error_msg}\n\n"
+                    "Possible solutions:\n"
+                    "1. Verify your Canvas API key is correct in your Claude Desktop config\n"
+                    "2. Check that the API key hasn't expired or been revoked\n"
+                    "3. Ensure the API key is properly set in the 'env' section of your config file\n"
+                    "4. Try regenerating your API key from Canvas Settings → Approved Integrations"
+                )
+            return f"Canvas API Error: {error_msg}"
+        except ValueError as e:
+            return f"Configuration Error: {str(e)}"
+        except Exception as e:
+            return f"Unexpected Error: {str(e)}\n\nError type: {type(e).__name__}"
+    return wrapper
 
 # -----------------------------
 # HELPER FUNCTIONS
@@ -114,7 +140,7 @@ def build_daily_briefing() -> str:
         briefing += f"• {a['course']}: {a['title']} (Due: {a['due_date']}, Points: {a['points']})\n"
     return briefing
 
-def create_assignment(
+def create_assignment_helper(
     course_id: int,
     name: str,
     description: Optional[str] = None,
@@ -174,7 +200,7 @@ def create_assignment(
         "html_url": assignment.html_url
     }
 
-def delete_assignment(course_id: int, assignment_id: int) -> dict:
+def delete_assignment_helper(course_id: int, assignment_id: int) -> dict:
     """
     Delete an assignment from a Canvas course.
     
@@ -205,7 +231,7 @@ def delete_assignment(course_id: int, assignment_id: int) -> dict:
         "deleted_assignment": assignment_info
     }
 
-def create_course(
+def create_course_helper(
     name: str,
     course_code: Optional[str] = None,
     start_at: Optional[str] = None,
@@ -329,510 +355,233 @@ def create_course(
     }
 
 # -----------------------------
-# MCP TOOLS
+# MCP TOOLS (FastMCP Decorators)
 # -----------------------------
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    """List all available tools."""
-    return [
-        Tool(
-            name="get_courses",
-            description="Get all Canvas courses for the authenticated user",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        ),
-        Tool(
-            name="get_upcoming_assignments",
-            description="Get assignments due in the next N days (default: 7). Assignments are sorted by priority score (higher priority = due sooner).",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "days": {
-                        "type": "integer",
-                        "description": "Number of days to look ahead for assignments",
-                        "default": 7
-                    }
-                },
-                "required": []
-            }
-        ),
-        Tool(
-            name="get_daily_briefing",
-            description="Get a formatted daily briefing of upcoming assignments due in the next 7 days",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        ),
-        Tool(
-            name="create_assignment",
-            description="Create a new assignment in a Canvas course",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "course_id": {
-                        "type": "integer",
-                        "description": "The ID of the course where the assignment will be created"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "The name/title of the assignment"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Assignment description (supports HTML)"
-                    },
-                    "due_at": {
-                        "type": "string",
-                        "description": "Due date in ISO 8601 format (e.g., '2025-12-31T23:59:00Z')"
-                    },
-                    "points_possible": {
-                        "type": "number",
-                        "description": "Maximum points for the assignment"
-                    },
-                    "submission_types": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "List of submission types. Common options: 'online_upload', 'online_text_entry', 'online_url', 'on_paper', 'none'"
-                    },
-                    "published": {
-                        "type": "boolean",
-                        "description": "Whether to publish the assignment immediately (default: false)",
-                        "default": False
-                    }
-                },
-                "required": ["course_id", "name"]
-            }
-        ),
-        Tool(
-            name="delete_assignment",
-            description="Delete an assignment from a Canvas course",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "course_id": {
-                        "type": "integer",
-                        "description": "The ID of the course containing the assignment"
-                    },
-                    "assignment_id": {
-                        "type": "integer",
-                        "description": "The ID of the assignment to delete"
-                    }
-                },
-                "required": ["course_id", "assignment_id"]
-            }
-        ),
-        Tool(
-            name="create_course",
-            description="Create a new Canvas course. Note: Requires appropriate permissions (typically admin or account admin).",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Course name (required)"
-                    },
-                    "course_code": {
-                        "type": "string",
-                        "description": "Course code (optional)"
-                    },
-                    "start_at": {
-                        "type": "string",
-                        "description": "Course start date in ISO 8601 format (e.g., '2025-01-01T00:00:00Z')"
-                    },
-                    "end_at": {
-                        "type": "string",
-                        "description": "Course end date in ISO 8601 format (e.g., '2025-12-31T23:59:59Z')"
-                    },
-                    "license": {
-                        "type": "string",
-                        "description": "Course license (optional)"
-                    },
-                    "is_public": {
-                        "type": "boolean",
-                        "description": "Whether the course is public (default: false)",
-                        "default": False
-                    },
-                    "is_public_to_auth_users": {
-                        "type": "boolean",
-                        "description": "Whether the course is public to authenticated users (default: false)",
-                        "default": False
-                    },
-                    "public_syllabus": {
-                        "type": "boolean",
-                        "description": "Whether the syllabus is public (default: false)",
-                        "default": False
-                    },
-                    "public_syllabus_to_auth": {
-                        "type": "boolean",
-                        "description": "Whether the syllabus is public to authenticated users (default: false)",
-                        "default": False
-                    },
-                    "public_description": {
-                        "type": "string",
-                        "description": "Public course description (optional)"
-                    },
-                    "account_id": {
-                        "type": "integer",
-                        "description": "Account ID to create the course in (optional, defaults to user's account)"
-                    }
-                },
-                "required": ["name"]
-            }
-        )
-    ]
+@handle_canvas_errors
+@mcp.tool()
+def get_courses() -> str:
+    """Get all Canvas courses for the authenticated user"""
+    courses = fetch_courses()
+    if not courses:
+        return "No courses found for this Canvas account."
+    
+    # Format courses as a readable list
+    formatted = "Canvas Courses:\n\n"
+    for i, course in enumerate(courses, 1):
+        formatted += f"{i}. {course['name']} (ID: {course['id']})\n"
+    formatted += f"\nTotal: {len(courses)} course(s)"
+    
+    return formatted
 
-@app.call_tool()
-async def call_tool(name: str, arguments: Optional[dict[str, Any]]) -> list[TextContent]:
-    """Handle tool calls from the MCP client."""
-    if arguments is None:
-        arguments = {}
+@handle_canvas_errors
+@mcp.tool()
+def get_upcoming_assignments(days: int = 7) -> str:
+    """Get assignments due in the next N days (default: 7). Assignments are sorted by priority score (higher priority = due sooner).
     
+    Args:
+        days: Number of days to look ahead for assignments (default: 7)
+    """
+    if days < 1:
+        days = 7
+    
+    assignments = fetch_upcoming_assignments(days)
+    if not assignments:
+        return f"No assignments due in the next {days} day(s)."
+    
+    # Format assignments with priority information
+    formatted = f"Upcoming Assignments (next {days} days):\n\n"
+    for i, a in enumerate(assignments, 1):
+        formatted += f"{i}. {a['course']}: {a['title']}\n"
+        formatted += f"   Due: {a['due_date']}\n"
+        formatted += f"   Points: {a['points']}\n"
+        formatted += f"   Priority Score: {a['priority_score']}\n"
+        formatted += f"   URL: {a['url']}\n\n"
+    formatted += f"Total: {len(assignments)} assignment(s)"
+    
+    return formatted
+
+@handle_canvas_errors
+@mcp.tool()
+def get_daily_briefing() -> str:
+    """Get a formatted daily briefing of upcoming assignments due in the next 7 days"""
+    return build_daily_briefing()
+
+@handle_canvas_errors
+@mcp.tool()
+def create_assignment(
+    course_id: int,
+    name: str,
+    description: Optional[str] = None,
+    due_at: Optional[str] = None,
+    points_possible: Optional[float] = None,
+    submission_types: Optional[List[str]] = None,
+    published: bool = False
+) -> str:
+    """Create a new assignment in a Canvas course.
+    
+    Args:
+        course_id: The ID of the course where the assignment will be created
+        name: The name/title of the assignment
+        description: Assignment description (supports HTML)
+        due_at: Due date in ISO 8601 format (e.g., '2025-12-31T23:59:00Z')
+        points_possible: Maximum points for the assignment
+        submission_types: List of submission types. Common options: 'online_upload', 'online_text_entry', 'online_url', 'on_paper', 'none'
+        published: Whether to publish the assignment immediately (default: false)
+    """
+    # Validate course_id exists and user has access
     try:
-        if name == "get_courses":
-            courses = fetch_courses()
-            if not courses:
-                return [TextContent(
-                    type="text",
-                    text="No courses found for this Canvas account."
-                )]
-            
-            # Format courses as a readable list
-            formatted = "Canvas Courses:\n\n"
-            for i, course in enumerate(courses, 1):
-                formatted += f"{i}. {course['name']} (ID: {course['id']})\n"
-            formatted += f"\nTotal: {len(courses)} course(s)"
-            
-            return [TextContent(type="text", text=formatted)]
-        
-        elif name == "get_upcoming_assignments":
-            days = arguments.get("days", 7)
-            if not isinstance(days, int) or days < 1:
-                days = 7
-            
-            assignments = fetch_upcoming_assignments(days)
-            if not assignments:
-                return [TextContent(
-                    type="text",
-                    text=f"No assignments due in the next {days} day(s)."
-                )]
-            
-            # Format assignments with priority information
-            formatted = f"Upcoming Assignments (next {days} days):\n\n"
-            for i, a in enumerate(assignments, 1):
-                formatted += f"{i}. {a['course']}: {a['title']}\n"
-                formatted += f"   Due: {a['due_date']}\n"
-                formatted += f"   Points: {a['points']}\n"
-                formatted += f"   Priority Score: {a['priority_score']}\n"
-                formatted += f"   URL: {a['url']}\n\n"
-            formatted += f"Total: {len(assignments)} assignment(s)"
-            
-            return [TextContent(type="text", text=formatted)]
-        
-        elif name == "get_daily_briefing":
-            briefing = build_daily_briefing()
-            return [TextContent(type="text", text=briefing)]
-        
-        elif name == "create_assignment":
-            # Validate required parameters
-            if "course_id" not in arguments:
-                return [TextContent(
-                    type="text",
-                    text="Error: 'course_id' is required to create an assignment."
-                )]
-            if "name" not in arguments:
-                return [TextContent(
-                    type="text",
-                    text="Error: 'name' is required to create an assignment."
-                )]
-            
-            course_id = arguments.get("course_id")
-            if not isinstance(course_id, int):
-                try:
-                    course_id = int(course_id)
-                except (ValueError, TypeError):
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: 'course_id' must be an integer, got {type(course_id).__name__}"
-                    )]
-            
-            name = arguments.get("name")
-            description = arguments.get("description")
-            due_at = arguments.get("due_at")
-            points_possible = arguments.get("points_possible")
-            submission_types = arguments.get("submission_types")
-            published = arguments.get("published", False)
-            
-            # Validate course_id exists and user has access
-            try:
-                canvas = get_canvas_client()
-                course = canvas.get_course(course_id)
-                # Try to access course name to verify access
-                _ = course.name
-            except CanvasException as e:
-                error_msg = str(e)
-                if "404" in error_msg or "Not Found" in error_msg:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: Course with ID {course_id} not found. Please verify the course ID is correct."
-                    )]
-                elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "Forbidden" in error_msg:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: You don't have permission to access course {course_id}. {error_msg}"
-                    )]
-                else:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error accessing course {course_id}: {error_msg}"
-                    )]
-            
-            # Create the assignment
-            assignment = create_assignment(
-                course_id=course_id,
-                name=name,
-                description=description,
-                due_at=due_at,
-                points_possible=points_possible,
-                submission_types=submission_types,
-                published=published
-            )
-            
-            # Format response
-            formatted = "✅ Assignment created successfully!\n\n"
-            formatted += f"Name: {assignment['name']}\n"
-            formatted += f"Course ID: {assignment['course_id']}\n"
-            formatted += f"Assignment ID: {assignment['id']}\n"
-            
-            if assignment['points_possible']:
-                formatted += f"Points: {assignment['points_possible']}\n"
-            
-            if assignment['due_at']:
-                formatted += f"Due Date: {assignment['due_at']}\n"
-            
-            if assignment['submission_types']:
-                formatted += f"Submission Types: {', '.join(assignment['submission_types'])}\n"
-            
-            formatted += f"Published: {assignment['published']}\n"
-            formatted += f"URL: {assignment['html_url']}\n"
-            
-            if assignment['description']:
-                formatted += f"\nDescription: {assignment['description'][:200]}...\n" if len(assignment['description']) > 200 else f"\nDescription: {assignment['description']}\n"
-            
-            return [TextContent(type="text", text=formatted)]
-        
-        elif name == "delete_assignment":
-            # Validate required parameters
-            if "course_id" not in arguments:
-                return [TextContent(
-                    type="text",
-                    text="Error: 'course_id' is required to delete an assignment."
-                )]
-            if "assignment_id" not in arguments:
-                return [TextContent(
-                    type="text",
-                    text="Error: 'assignment_id' is required to delete an assignment."
-                )]
-            
-            course_id = arguments.get("course_id")
-            assignment_id = arguments.get("assignment_id")
-            
-            # Validate types
-            if not isinstance(course_id, int):
-                try:
-                    course_id = int(course_id)
-                except (ValueError, TypeError):
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: 'course_id' must be an integer, got {type(course_id).__name__}"
-                    )]
-            
-            if not isinstance(assignment_id, int):
-                try:
-                    assignment_id = int(assignment_id)
-                except (ValueError, TypeError):
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: 'assignment_id' must be an integer, got {type(assignment_id).__name__}"
-                    )]
-            
-            # Validate course_id and assignment_id exist and user has access
-            try:
-                canvas = get_canvas_client()
-                course = canvas.get_course(course_id)
-                assignment = course.get_assignment(assignment_id)
-                # Try to access course and assignment names to verify access
-                _ = course.name
-                _ = assignment.name
-            except CanvasException as e:
-                error_msg = str(e)
-                if "404" in error_msg or "Not Found" in error_msg:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: Course with ID {course_id} or assignment with ID {assignment_id} not found. Please verify the IDs are correct."
-                    )]
-                elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "Forbidden" in error_msg:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: You don't have permission to delete assignment {assignment_id} from course {course_id}. {error_msg}"
-                    )]
-                else:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error accessing course {course_id} or assignment {assignment_id}: {error_msg}"
-                    )]
-            
-            # Delete the assignment
-            try:
-                result = delete_assignment(course_id=course_id, assignment_id=assignment_id)
-                
-                # Format response
-                formatted = "✅ Assignment deleted successfully!\n\n"
-                formatted += f"Deleted Assignment: {result['deleted_assignment']['name']}\n"
-                formatted += f"Assignment ID: {result['deleted_assignment']['id']}\n"
-                formatted += f"Course: {result['deleted_assignment']['course_name']}\n"
-                formatted += f"Course ID: {result['deleted_assignment']['course_id']}\n"
-                
-                return [TextContent(type="text", text=formatted)]
-            except CanvasException as e:
-                error_msg = str(e)
-                return [TextContent(
-                    type="text",
-                    text=f"Error deleting assignment: {error_msg}"
-                )]
-        
-        elif name == "create_course":
-            # Validate required parameters
-            if "name" not in arguments:
-                return [TextContent(
-                    type="text",
-                    text="Error: 'name' is required to create a course."
-                )]
-            
-            name = arguments.get("name")
-            course_code = arguments.get("course_code")
-            start_at = arguments.get("start_at")
-            end_at = arguments.get("end_at")
-            license = arguments.get("license")
-            is_public = arguments.get("is_public", False)
-            is_public_to_auth_users = arguments.get("is_public_to_auth_users", False)
-            public_syllabus = arguments.get("public_syllabus", False)
-            public_syllabus_to_auth = arguments.get("public_syllabus_to_auth", False)
-            public_description = arguments.get("public_description")
-            account_id = arguments.get("account_id")
-            
-            # Validate account_id if provided
-            if account_id is not None:
-                if not isinstance(account_id, int):
-                    try:
-                        account_id = int(account_id)
-                    except (ValueError, TypeError):
-                        return [TextContent(
-                            type="text",
-                            text=f"Error: 'account_id' must be an integer, got {type(account_id).__name__}"
-                        )]
-            
-            # Create the course
-            try:
-                course = create_course(
-                    name=name,
-                    course_code=course_code,
-                    start_at=start_at,
-                    end_at=end_at,
-                    license=license,
-                    is_public=is_public,
-                    is_public_to_auth_users=is_public_to_auth_users,
-                    public_syllabus=public_syllabus,
-                    public_syllabus_to_auth=public_syllabus_to_auth,
-                    public_description=public_description,
-                    account_id=account_id
-                )
-                
-                # Format response
-                formatted = "✅ Course created successfully!\n\n"
-                formatted += f"Name: {course['name']}\n"
-                formatted += f"Course ID: {course['id']}\n"
-                
-                if course['course_code']:
-                    formatted += f"Course Code: {course['course_code']}\n"
-                
-                if course['start_at']:
-                    formatted += f"Start Date: {course['start_at']}\n"
-                
-                if course['end_at']:
-                    formatted += f"End Date: {course['end_at']}\n"
-                
-                formatted += f"Workflow State: {course['workflow_state']}\n"
-                formatted += f"URL: {course['html_url']}\n"
-                
-                return [TextContent(type="text", text=formatted)]
-            except CanvasException as e:
-                error_msg = str(e)
-                if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "Forbidden" in error_msg:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error: You don't have permission to create courses. {error_msg}\n\n"
-                             "Note: Course creation typically requires admin or account admin permissions."
-                    )]
-                else:
-                    return [TextContent(
-                        type="text",
-                        text=f"Error creating course: {error_msg}"
-                    )]
-        
-        else:
-            return [TextContent(
-                type="text",
-                text=f"Unknown tool: {name}"
-            )]
-    
+        canvas = get_canvas_client()
+        course = canvas.get_course(course_id)
+        # Try to access course name to verify access
+        _ = course.name
     except CanvasException as e:
         error_msg = str(e)
-        # Check for common authentication errors
-        if "401" in error_msg or "Unauthorized" in error_msg or "authentication" in error_msg.lower():
-            return [TextContent(
-                type="text",
-                text=f"Canvas Authentication Error: {error_msg}\n\n"
-                     "Possible solutions:\n"
-                     "1. Verify your Canvas API key is correct in your Claude Desktop config\n"
-                     "2. Check that the API key hasn't expired or been revoked\n"
-                     "3. Ensure the API key is properly set in the 'env' section of your config file\n"
-                     "4. Try regenerating your API key from Canvas Settings → Approved Integrations"
-            )]
-        return [TextContent(
-            type="text",
-            text=f"Canvas API Error: {error_msg}"
-        )]
-    except ValueError as e:
-        # Handle configuration errors (missing API key, etc.)
-        return [TextContent(
-            type="text",
-            text=f"Configuration Error: {str(e)}"
-        )]
-    except Exception as e:
-        return [TextContent(
-            type="text",
-            text=f"Unexpected Error: {str(e)}\n\n"
-                 f"Error type: {type(e).__name__}"
-        )]
+        if "404" in error_msg or "Not Found" in error_msg:
+            return f"Error: Course with ID {course_id} not found. Please verify the course ID is correct."
+        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "Forbidden" in error_msg:
+            return f"Error: You don't have permission to access course {course_id}. {error_msg}"
+        else:
+            return f"Error accessing course {course_id}: {error_msg}"
+    
+    # Create the assignment
+    assignment = create_assignment_helper(
+        course_id=course_id,
+        name=name,
+        description=description,
+        due_at=due_at,
+        points_possible=points_possible,
+        submission_types=submission_types,
+        published=published
+    )
+    
+    # Format response
+    formatted = "✅ Assignment created successfully!\n\n"
+    formatted += f"Name: {assignment['name']}\n"
+    formatted += f"Course ID: {assignment['course_id']}\n"
+    formatted += f"Assignment ID: {assignment['id']}\n"
+    
+    if assignment['points_possible']:
+        formatted += f"Points: {assignment['points_possible']}\n"
+    
+    if assignment['due_at']:
+        formatted += f"Due Date: {assignment['due_at']}\n"
+    
+    if assignment['submission_types']:
+        formatted += f"Submission Types: {', '.join(assignment['submission_types'])}\n"
+    
+    formatted += f"Published: {assignment['published']}\n"
+    formatted += f"URL: {assignment['html_url']}\n"
+    
+    if assignment['description']:
+        desc_preview = assignment['description'][:200] + "..." if len(assignment['description']) > 200 else assignment['description']
+        formatted += f"\nDescription: {desc_preview}\n"
+    
+    return formatted
+
+@handle_canvas_errors
+@mcp.tool()
+def delete_assignment(course_id: int, assignment_id: int) -> str:
+    """Delete an assignment from a Canvas course.
+    
+    Args:
+        course_id: The ID of the course containing the assignment
+        assignment_id: The ID of the assignment to delete
+    """
+    # Validate course_id and assignment_id exist and user has access
+    try:
+        canvas = get_canvas_client()
+        course = canvas.get_course(course_id)
+        assignment = course.get_assignment(assignment_id)
+        # Try to access course and assignment names to verify access
+        _ = course.name
+        _ = assignment.name
+    except CanvasException as e:
+        error_msg = str(e)
+        if "404" in error_msg or "Not Found" in error_msg:
+            return f"Error: Course with ID {course_id} or assignment with ID {assignment_id} not found. Please verify the IDs are correct."
+        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "Forbidden" in error_msg:
+            return f"Error: You don't have permission to delete assignment {assignment_id} from course {course_id}. {error_msg}"
+        else:
+            return f"Error accessing course {course_id} or assignment {assignment_id}: {error_msg}"
+    
+    # Delete the assignment
+    result = delete_assignment_helper(course_id=course_id, assignment_id=assignment_id)
+    
+    # Format response
+    formatted = "✅ Assignment deleted successfully!\n\n"
+    formatted += f"Deleted Assignment: {result['deleted_assignment']['name']}\n"
+    formatted += f"Assignment ID: {result['deleted_assignment']['id']}\n"
+    formatted += f"Course: {result['deleted_assignment']['course_name']}\n"
+    formatted += f"Course ID: {result['deleted_assignment']['course_id']}\n"
+    
+    return formatted
+
+@handle_canvas_errors
+@mcp.tool()
+def create_course(
+    name: str,
+    course_code: Optional[str] = None,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+    license: Optional[str] = None,
+    is_public: bool = False,
+    is_public_to_auth_users: bool = False,
+    public_syllabus: bool = False,
+    public_syllabus_to_auth: bool = False,
+    public_description: Optional[str] = None,
+    account_id: Optional[int] = None
+) -> str:
+    """Create a new Canvas course. Note: Requires appropriate permissions (typically admin or account admin).
+    
+    Args:
+        name: Course name (required)
+        course_code: Course code (optional)
+        start_at: Course start date in ISO 8601 format (e.g., '2025-01-01T00:00:00Z')
+        end_at: Course end date in ISO 8601 format (e.g., '2025-12-31T23:59:59Z')
+        license: Course license (optional)
+        is_public: Whether the course is public (default: false)
+        is_public_to_auth_users: Whether the course is public to authenticated users (default: false)
+        public_syllabus: Whether the syllabus is public (default: false)
+        public_syllabus_to_auth: Whether the syllabus is public to authenticated users (default: false)
+        public_description: Public course description (optional)
+        account_id: Account ID to create the course in (optional, defaults to user's account)
+    """
+    # Create the course
+    course = create_course_helper(
+        name=name,
+        course_code=course_code,
+        start_at=start_at,
+        end_at=end_at,
+        license=license,
+        is_public=is_public,
+        is_public_to_auth_users=is_public_to_auth_users,
+        public_syllabus=public_syllabus,
+        public_syllabus_to_auth=public_syllabus_to_auth,
+        public_description=public_description,
+        account_id=account_id
+    )
+    
+    # Format response
+    formatted = "✅ Course created successfully!\n\n"
+    formatted += f"Name: {course['name']}\n"
+    formatted += f"Course ID: {course['id']}\n"
+    
+    if course['course_code']:
+        formatted += f"Course Code: {course['course_code']}\n"
+    
+    if course['start_at']:
+        formatted += f"Start Date: {course['start_at']}\n"
+    
+    if course['end_at']:
+        formatted += f"End Date: {course['end_at']}\n"
+    
+    formatted += f"Workflow State: {course['workflow_state']}\n"
+    formatted += f"URL: {course['html_url']}\n"
+    
+    return formatted
 
 # -----------------------------
 # MCP SERVER ENTRY POINT
 # -----------------------------
-async def main():
-    """Run the MCP server using stdio."""
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options()
-        )
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    mcp.run()

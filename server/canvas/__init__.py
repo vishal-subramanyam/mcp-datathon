@@ -1,0 +1,2 @@
+"""Canvas MCP server module."""
+
