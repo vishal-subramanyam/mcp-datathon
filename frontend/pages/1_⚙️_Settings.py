@@ -109,27 +109,65 @@ if user_id:
     else:
         st.info("🔗 Link your Google account to enable Gmail and Calendar features")
         
-        # Button to start OAuth flow
+        # Button to start OAuth flow - using Streamlit button for better visibility
         import urllib.parse
         auth_url = f"{API_URL}/auth/google/authorize?user_id={urllib.parse.quote(user_id)}"
         
-        st.markdown(f"""
-        <a href="{auth_url}" target="_self">
-            <button style="background-color: #4285F4; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">
-                🔗 Connect Google Account
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
+        # Create a prominent button using Streamlit
+        st.markdown("### 👆 Click the button below to connect:")
         
-        st.markdown("""
-        **What this does:**
-        - Opens Google's secure login page
-        - Requests access to Gmail and Calendar
-        - Stores your credentials securely in Supabase
-        - No manual token copying needed!
+        # Display the button prominently
+        col1, col2, col3 = st.columns([1, 3, 1])
+        with col2:
+            # Create a clickable link styled as a button
+            st.markdown(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="{auth_url}" target="_self" style="text-decoration: none;">
+                    <button style="
+                        background-color: #4285F4;
+                        color: white;
+                        padding: 15px 40px;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 18px;
+                        font-weight: bold;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                        transition: background-color 0.3s;
+                        width: 100%;
+                    " onmouseover="this.style.backgroundColor='#357ae8'" onmouseout="this.style.backgroundColor='#4285F4'">
+                        🔗 Connect Google Account
+                    </button>
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Also provide a Streamlit button as backup
+            if st.button("🔗 Connect Google Account (Alternative)", use_container_width=True, help="Click this if the button above doesn't work"):
+                st.markdown(f'<script>window.location.href = "{auth_url}";</script>', unsafe_allow_html=True)
+                st.info("Redirecting to Google... If you're not redirected, click the link above.")
+                st.stop()
         
-        **Note:** You'll be redirected back to this page after authentication.
-        """)
+        st.markdown("---")
+        
+        with st.expander("ℹ️ What happens when I click?", expanded=True):
+            st.markdown("""
+            **Step-by-step process:**
+            1. **Click "Connect Google Account"** → You'll be redirected to Google's secure login page
+            2. **Sign in** → Enter your Google account email and password
+            3. **Grant permissions** → Google will ask you to allow access to:
+               - Gmail (to read and send emails)
+               - Google Calendar (to view and create events)
+            4. **Automatic redirect** → You'll be brought back to this page
+            5. **Success!** → You'll see a green success message
+            6. **Ready to use** → You can now use Gmail and Calendar features in the chat!
+            
+            **Security:**
+            - Your credentials are stored securely in Supabase
+            - Only you can access your data
+            - You can unlink your account anytime
+            - No manual token copying needed!
+            """)
         
         # Manual fallback option
         with st.expander("⚠️ Manual Setup (Advanced)", expanded=False):
