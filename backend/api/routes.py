@@ -318,13 +318,13 @@ async def delete_credentials(user_id: str, service: str):
 
 
 @router.get("/auth/google/authorize")
-async def google_authorize(user_id: str):
+async def google_authorize(user_id: Optional[str] = None):
     """
     Initiate Google OAuth flow.
     Redirects user to Google consent screen.
     
     Args:
-        user_id: User's unique identifier
+        user_id: Optional user's unique identifier. If not provided, will use Google email from OAuth callback.
     """
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(
@@ -344,8 +344,10 @@ async def google_authorize(user_id: str):
         
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
+        
+        # Store state with user_id (can be None, will be set from Google email in callback)
         oauth_states[state] = {
-            "user_id": user_id,
+            "user_id": user_id,  # Can be None
             "timestamp": time.time()
         }
         
@@ -353,7 +355,7 @@ async def google_authorize(user_id: str):
         current_time = time.time()
         oauth_states.clear()  # Simple cleanup - in production use TTL-based storage
         oauth_states[state] = {
-            "user_id": user_id,
+            "user_id": user_id,  # Can be None
             "timestamp": current_time
         }
         
@@ -457,23 +459,25 @@ async def google_callback(code: str, state: str):
         credentials = flow.credentials
         
         # Get user email from Google
+        user_email = None
         try:
             oauth2_service = build('oauth2', 'v2', credentials=credentials)
             user_info = oauth2_service.userinfo().get().execute()
             user_email = user_info.get('email')
-            
-            # Use email as user_id if not provided
-            if not user_id and user_email:
-                user_id = user_email
         except Exception as e:
             print(f"Warning: Could not fetch user email: {e}")
             # Continue without email
         
+        # Use email as user_id if not provided in state
         if not user_id:
-            raise HTTPException(
-                status_code=400,
-                detail="User ID is required. Please provide user_id in the authorization request."
-            )
+            if user_email:
+                user_id = user_email
+                print(f"Using Google email as user_id: {user_id}")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="User ID is required. Could not retrieve email from Google. Please provide user_id in the authorization request."
+                )
         
         # Convert credentials to dict for storage
         creds_dict = {
@@ -514,5 +518,49 @@ async def google_callback(code: str, state: str):
         raise HTTPException(
             status_code=500,
             detail=f"OAuth callback error: {str(e)}"
+        )
+
+
+@router.get("/auth/users")
+async def list_users():
+    """
+    List all users who have stored credentials.
+    Useful for verification and debugging.
+    
+    Returns:
+        List of users with their services
+    """
+    try:
+        users = await AuthService.list_all_users()
+        return {"users": users, "count": len(users)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list users: {str(e)}"
+        )
+
+
+@router.get("/auth/users/{user_id}/credentials")
+async def get_user_credentials_summary(user_id: str):
+    """
+    Get summary of all credentials for a specific user.
+    
+    Args:
+        user_id: User's unique identifier
+    
+    Returns:
+        Dictionary mapping service names to credential status
+    """
+    try:
+        credentials = await AuthService.get_all_credentials_for_user(user_id)
+        return {
+            "user_id": user_id,
+            "credentials": credentials,
+            "services": list(credentials.keys())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get user credentials: {str(e)}"
         )
 
