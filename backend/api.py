@@ -20,10 +20,33 @@ from .service_layer import MCPService
 
 app = FastAPI(title="Canvas MCP API")
 
-# CORS middleware
+# Get port from environment (Render provides this)
+PORT = int(os.getenv("PORT", 8000))
+
+# Get frontend URL from environment
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
+
+# CORS middleware - allow frontend and localhost for development
+# Build allowed origins list
+allowed_origins = [
+    FRONTEND_URL,
+    "http://localhost:8501",
+    "http://127.0.0.1:8501",
+]
+
+# Add Streamlit Cloud URL if provided
+STREAMLIT_URL = os.getenv("STREAMLIT_URL")
+if STREAMLIT_URL:
+    allowed_origins.append(STREAMLIT_URL)
+
+# In production, be more specific with origins
+# In development, allow all (for testing)
+if os.getenv("ENVIRONMENT") != "production":
+    allowed_origins = ["*"]  # Allow all in development
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -127,10 +150,13 @@ Use the tools when needed to answer user queries."""
                     "tool_choice": "auto"
                 }
                 
+                # Get base URL from environment or use default
+                base_url = os.getenv("BASE_URL", "http://localhost:8000")
+                
                 headers = {
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:8000",  # Optional: for tracking
+                    "HTTP-Referer": base_url,  # Optional: for tracking
                     "X-Title": "Canvas MCP Frontend"  # Optional: for tracking
                 }
                 
