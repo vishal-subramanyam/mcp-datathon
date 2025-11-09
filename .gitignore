@@ -128,22 +128,27 @@ dmypy.json
 *.swp
 *.swo
 *~
+
+# OS-specific
 .DS_Store
+Thumbs.db
 
 # Project-specific
-# Canvas API keys and sensitive configuration
-.env
-.env.local
-*.key
-config.ini
-secrets.json
+# OAuth tokens and credentials (Google Calendar, Gmail)
+token.json
+calendar_token.json
+credentials.json
+*.credentials.json
 
-# Logs
-*.log
-logs/
+# Streamlit
+.streamlit/
 
-# Temporary files
+# FastAPI/uvicorn
+*.pid
+*.sock
+uvicorn.log
+
+# Additional temporary files
 *.tmp
 *.temp
-.cache/
 
