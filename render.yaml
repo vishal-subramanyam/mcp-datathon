@@ -1,13 +1,72 @@
 services:
+  # Backend Web Service
   - type: web
-    name: mcp-datathon-backend
+    name: canvas-mpc-backend
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements-backend.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      # Python version
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: PORT
-        value: 10000
-    healthCheckPath: /health
-
+      
+      # Environment
+      - key: ENVIRONMENT
+        value: production
+      
+      # Base URL (set after first deploy)
+      - key: BASE_URL
+        value: https://canvas-mpc-backend.onrender.com
+      
+      # OpenRouter API (add via Render Dashboard - keep secret)
+      - key: OPENROUTER_API_KEY
+        sync: false
+      
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-3.5-sonnet
+      
+      # Supabase (add via Render Dashboard - keep secret)
+      - key: SUPABASE_URL
+        sync: false
+      
+      - key: SUPABASE_KEY
+        sync: false
+      
+      # Frontend URLs for CORS (update after deploying frontend)
+      - key: FRONTEND_URL
+        value: https://your-app.streamlit.app
+      
+      - key: STREAMLIT_URL
+        value: https://your-app.streamlit.app
+      
+      # Optional: Default Canvas credentials
+      - key: CANVAS_API_URL
+        value: https://canvas.instructure.com
+      
+      - key: CANVAS_API_KEY
+        sync: false
+      
+      # Google API paths (if using default credentials)
+      - key: CALENDAR_CREDENTIALS_PATH
+        value: /etc/secrets/credentials.json
+      
+      - key: CALENDAR_TOKEN_PATH
+        value: /etc/secrets/calendar_token.json
+      
+      - key: GMAIL_CREDENTIALS_PATH
+        value: /etc/secrets/credentials.json
+      
+      - key: GMAIL_TOKEN_PATH
+        value: /etc/secrets/token.json
+      
+      - key: FLASHCARD_STORAGE_PATH
+        value: /opt/render/project/flashcard_data
+    
+    # Persistent disk for flashcard data
+    disk:
+      name: flashcard-data
+      mountPath: /opt/render/project/flashcard_data
+      sizeGB: 1

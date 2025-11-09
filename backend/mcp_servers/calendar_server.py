@@ -40,7 +40,7 @@ def get_calendar_service():
         return _calendar_service
     
     creds = None
-    token_path = os.getenv("CALENDAR_TOKEN_PATH", "calendar_token.json")
+    token_path = os.getenv("CALENDAR_TOKEN_PATH", "data/tokens/calendar_token.json")
     credentials_path = os.getenv("CALENDAR_CREDENTIALS_PATH", "credentials.json")
     
     # Try to load from .env file

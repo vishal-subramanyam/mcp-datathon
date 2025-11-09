@@ -1,0 +1,349 @@
+{
+  "sets": [
+    {
+      "id": "392a1427-74e4-47e9-9b54-4c47cf6f872b",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": "Midterm preparation covering system calls, file systems, concurrency, signals, and access control.",
+      "flashcards": [
+        {
+          "question": "What are the three main system calls for file I/O in Unix/Linux?",
+          "answer": "open(), read(), and write() are the three fundamental system calls for file I/O operations. open() creates a file descriptor, read() reads data from a file descriptor, and write() writes data to a file descriptor.",
+          "id": "965e429c-8bc3-4c64-a11d-1d7053287f27",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the purpose of the per-process file descriptor table?",
+          "answer": "The per-process file descriptor table maps integer file descriptors to entries in the kernel's open file table. Each process has its own fd table, allowing processes to maintain their own set of open files independently.",
+          "id": "d3f78ca2-f2d0-4097-b415-faa09da09191",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the difference between raw write() and stdio's fprintf()?",
+          "answer": "Raw write() makes direct system calls and writes directly to the file descriptor, while fprintf() uses buffered I/O through the stdio library, collecting data in a buffer before making system calls, which can be more efficient for multiple small writes.",
+          "id": "f36d8d61-6b04-4b24-809c-69b27c4260cf",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the purpose of the setuid bit in file permissions?",
+          "answer": "The setuid bit allows a program to run with the privileges of the file's owner rather than the user executing it. When set on an executable file, the program runs with the permissions of the file's owner regardless of who executes it.",
+          "id": "8cc25e02-02a7-41b4-aac6-772ccf47af9e",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What are the three types of permission bits in st_mode?",
+          "answer": "The three types are: read (r), write (w), and execute (x). These permissions are set for three categories: owner, group, and others, resulting in nine total permission bits.",
+          "id": "8e59fe91-5f3e-44a3-a7ce-154beb3b62e9",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is a POSIX thread and how is it created?",
+          "answer": "A POSIX thread (pthread) is a lightweight unit of execution within a process. It's created using pthread_create() function, shares the process's address space with other threads, and can execute independently.",
+          "id": "9ac5f105-86ce-479b-b088-6da91d98de44",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the purpose of the inode table?",
+          "answer": "The inode table stores metadata about files, including file size, permissions, ownership, timestamps, and disk block locations. Each file in the filesystem has a unique inode number that serves as an index into this table.",
+          "id": "7b8a852e-d42f-4b2d-b264-37e7f0b142be",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is a signal handler and how is it installed?",
+          "answer": "A signal handler is a function that executes when a specific signal is received by a process. It's installed using the signal() or sigaction() system calls to specify how the process should respond to specific signals.",
+          "id": "7e6ee942-3f51-41b3-8300-e0ef7ab00baf",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What information does the kernel-wide open file table contain?",
+          "answer": "The open file table contains information about all open files across all processes, including the current file position (offset), reference count, and a pointer to the corresponding inode table entry.",
+          "id": "2033d2f4-e041-417c-8584-50eb5046f444",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "How are file type bits represented in st_mode?",
+          "answer": "File type bits are stored in the high-order bits of st_mode and indicate whether the file is: regular (-), directory (d), symbolic link (l), character device (c), block device (b), socket (s), or FIFO pipe (p).",
+          "id": "c5f69276-ba0d-4fbb-9af9-224a60787a8b",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What happens when a signal is delivered to a process?",
+          "answer": "When a signal is delivered, the process stops its normal execution flow, and either: 1) executes the registered signal handler function, 2) performs the default action (often termination), or 3) ignores the signal if configured to do so.",
+          "id": "9cb22e5f-5635-42e2-b379-7f1cf6b58d89",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What are the key components of a Unix filesystem layout?",
+          "answer": "Key components include: superblock (filesystem metadata), inode table (file metadata), data blocks (actual file content), and free block/inode maps (tracking available space).",
+          "id": "6f1ee36e-0bcd-468a-8fd7-402a79773435",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "How does file access control work using permission bits?",
+          "answer": "When a process attempts to access a file, the kernel checks the process's user ID and group ID against the file's permission bits. Access is granted if either the user permissions (if owner), group permissions (if in group), or other permissions allow the requested operation.",
+          "id": "29a2c923-7f46-4065-a102-ddb26f6c0c9a",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the difference between a process and a thread?",
+          "answer": "A process is an independent program with its own memory space, while threads are lightweight units of execution within a process. Threads share the same memory space and resources of their parent process but have their own stack and program counter.",
+          "id": "5420b626-bf35-462c-a5be-db7d0786a96f",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        },
+        {
+          "question": "What is the purpose of the setgid bit on a directory?",
+          "answer": "When the setgid bit is set on a directory, new files created within that directory inherit the group ownership of the directory instead of the creating user's primary group. This helps maintain consistent group ownership in shared directories.",
+          "id": "b8254db8-e503-4bc9-aca1-94be2b6ba05b",
+          "created_at": "2025-11-09T10:07:53.898114+00:00"
+        }
+      ],
+      "created_at": "2025-11-09T10:07:05.047520+00:00",
+      "updated_at": "2025-11-09T10:07:53.898114+00:00"
+    },
+    {
+      "id": "2d564840-d54b-4b0c-872d-edda16f5cd77",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": "Midterm preparation flashcards covering system calls, file systems, threads, signals, and access control.",
+      "flashcards": [
+        {
+          "question": "What are the three main system calls for file operations in Unix/Linux?",
+          "answer": "open(), read(), and write() are the main system calls. open() creates a file descriptor, read() reads data from a file descriptor into a buffer, and write() writes data from a buffer to a file descriptor.",
+          "id": "f82aa6c6-6f13-478a-9d8b-0cbd1b42b9c2",
+          "created_at": "2025-11-09T10:09:21.112899+00:00"
+        },
+        {
+          "question": "Explain the relationship between the file descriptor table, open file table, and inode table.",
+          "answer": "The per-process fd table maps file descriptors to entries in the kernel-wide open file table. The open file table contains file offset and access mode, and points to entries in the inode table. The inode table stores the actual file metadata and data block pointers.",
+          "id": "2346076e-4a81-462f-9332-edb08c0776a1",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What is the difference between raw write() and stdio buffered writing?",
+          "answer": "Raw write() makes immediate system calls for each write operation, while stdio (like fprintf, fwrite) buffers data in user space before making fewer, larger system calls. Stdio is typically more efficient but requires explicit flushing.",
+          "id": "3721a5ee-2511-4dcb-8fdb-6c77e87a9d31",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What information is stored in the st_mode bits?",
+          "answer": "st_mode bits store: file type (regular, directory, etc.), permission bits (read/write/execute for user/group/others), and special permission bits (setuid, setgid, sticky bit).",
+          "id": "2a3e9667-fec4-4132-b442-899963a0961e",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What is the purpose of setuid and setgid bits?",
+          "answer": "setuid and setgid bits allow a program to run with the privileges of the file owner or group (respectively) rather than the user executing it. This enables controlled privilege escalation for specific programs.",
+          "id": "c834036d-b5fe-4325-92a1-67712cd95c27",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "How does Unix/Linux determine if a user can access a file?",
+          "answer": "The system checks: 1) Is user the owner? Use owner permissions. 2) Is user in the file's group? Use group permissions. 3) Otherwise use other permissions. Each category has read/write/execute bits.",
+          "id": "6526d1fb-c1b5-4747-947c-302d0cf051ba",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What is a thread and how does it differ from a process?",
+          "answer": "A thread is a unit of execution within a process. Threads share the same address space, file descriptors, and other resources of the process, while processes have separate memory spaces and resources.",
+          "id": "7b77533b-e4ab-4a19-b6a8-628ffae37eb1",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What are the key functions in POSIX threads (pthreads)?",
+          "answer": "Key functions include: pthread_create() to create threads, pthread_join() to wait for thread completion, pthread_mutex_lock/unlock() for synchronization, and pthread_exit() to terminate threads.",
+          "id": "79001857-cda4-4e38-8380-cb1acf62fc09",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What is a signal in Unix/Linux?",
+          "answer": "A signal is a software interrupt delivered to a process to notify it of a specific event. Examples include SIGINT (Ctrl+C), SIGKILL (terminate), and SIGSEGV (segmentation fault).",
+          "id": "8c5278d6-fa17-41c8-b43a-dd4916ac743b",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "How does a signal handler work?",
+          "answer": "A signal handler is a function registered using sigaction() or signal() that executes when a specific signal is received. It interrupts the normal flow of program execution to handle the signal.",
+          "id": "1f4d9093-e5b3-4144-a632-8a2622b5e6fb",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What are the main components of a Unix filesystem layout?",
+          "answer": "Key components include: superblock (filesystem metadata), inode table (file metadata), data blocks (file contents), and free block/inode bitmaps (track available space).",
+          "id": "2e11b715-a8fa-45c2-9d43-bd6f92679370",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What information is stored in an inode?",
+          "answer": "An inode stores: file metadata (permissions, timestamps, size), owner/group IDs, link count, and pointers to data blocks (direct, indirect, double indirect blocks).",
+          "id": "0c57c5d1-a894-412f-b961-d0adb3b30440",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What happens when you open() a file?",
+          "answer": "1) System validates path and permissions 2) Creates entry in open file table 3) Allocates file descriptor in process fd table 4) Returns fd number or -1 on error.",
+          "id": "4303f297-5f4c-4c92-bfad-a4bf5eaa2cd0",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "What are the three standard file descriptors?",
+          "answer": "0 (stdin) for standard input, 1 (stdout) for standard output, and 2 (stderr) for standard error output.",
+          "id": "c18f89c3-2c48-4cb0-a8fd-7c8313d8c493",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        },
+        {
+          "question": "How are thread-safe functions different from regular functions?",
+          "answer": "Thread-safe functions can be safely called simultaneously by multiple threads without data corruption. They use synchronization mechanisms (like mutexes) to protect shared resources and maintain consistency.",
+          "id": "a9f53403-f00c-4e6a-b6eb-4ba6eebc5027",
+          "created_at": "2025-11-09T10:09:21.113904+00:00"
+        }
+      ],
+      "created_at": "2025-11-09T10:08:34.255821+00:00",
+      "updated_at": "2025-11-09T10:09:21.113904+00:00"
+    },
+    {
+      "id": "535635bf-bb8b-4b69-924d-cf498f7a17cc",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": "Midterm preparation flashcards covering system calls, file systems, concurrency, and signals.",
+      "flashcards": [
+        {
+          "question": "What are the key system calls for file operations and their purpose?",
+          "answer": "open(): creates file descriptor for file access\nread(): reads data from file descriptor\nwrite(): writes data to file descriptor",
+          "tags": [],
+          "id": "50b3dd4d-5c87-4529-8e46-fdd889fb825b",
+          "created_at": "2025-11-09T10:14:32.341462+00:00"
+        },
+        {
+          "question": "Explain the three-level structure for file management in Unix/Linux",
+          "answer": "1. Per-process file descriptor table: maps fd numbers to entries in open file table\n2. Kernel-wide open file table: tracks file offset and access modes\n3. Inode table: contains actual file metadata and data block pointers",
+          "tags": [],
+          "id": "89833091-2fa7-4cb1-82d1-ece0d42792bc",
+          "created_at": "2025-11-09T10:14:32.341462+00:00"
+        },
+        {
+          "question": "What is the difference between raw write() and stdio writing?",
+          "answer": "Raw write(): Direct system call, unbuffered, writes immediately to disk\nstdio writing (fprintf, etc): Buffered I/O, accumulates data in user-space buffer before making system calls, generally more efficient for small writes",
+          "tags": [],
+          "id": "5871d9f6-f5dd-4e1c-8bc4-72b54587af49",
+          "created_at": "2025-11-09T10:14:32.341462+00:00"
+        },
+        {
+          "question": "What are the key st_mode bits and their meanings?",
+          "answer": "File type bits: Regular (-), Directory (d), Link (l), etc\nPermission bits: rwx for user/group/others\nSpecial bits: setuid (4000), setgid (2000), sticky bit (1000)",
+          "tags": [],
+          "id": "59b66d42-a99f-438d-9168-48244bebee62",
+          "created_at": "2025-11-09T10:14:32.341462+00:00"
+        },
+        {
+          "question": "What are POSIX Threads and their basic operations?",
+          "answer": "POSIX Threads (pthreads) are standardized threading interface:\n- pthread_create(): create new thread\n- pthread_join(): wait for thread completion\n- pthread_mutex_lock/unlock(): synchronization primitives\n- pthread_exit(): terminate calling thread",
+          "tags": [],
+          "id": "fc47aaf7-3154-4be3-90ca-3387ca73e03d",
+          "created_at": "2025-11-09T10:14:32.341462+00:00"
+        }
+      ],
+      "created_at": "2025-11-09T10:14:08.059794+00:00",
+      "updated_at": "2025-11-09T10:14:32.341462+00:00"
+    },
+    {
+      "id": "fa3456f8-164a-4682-9f06-6b6cf37629d0",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": null,
+      "flashcards": [
+        {
+          "question": "What are the main system calls used for File I/O operations?",
+          "answer": "The main File I/O system calls include open(), read(), write(), close(), and lseek() for file operations and manipulation",
+          "tags": [],
+          "id": "2e6e045e-9313-4ad0-8685-36fed2bb786d",
+          "created_at": "2025-11-09T10:16:06.504555+00:00"
+        },
+        {
+          "question": "What are the key process management system calls in operating systems?",
+          "answer": "Key process management system calls include fork(), exec(), wait(), and exit() for creating, executing, waiting for, and terminating processes",
+          "tags": [],
+          "id": "9df832ee-9104-4522-acf0-402688b6e8bc",
+          "created_at": "2025-11-09T10:16:06.504555+00:00"
+        },
+        {
+          "question": "How does virtual memory work in computer systems?",
+          "answer": "Virtual memory creates an abstraction that provides each process with its own virtual address space, using page tables to map virtual addresses to physical memory and managing memory through paging/swapping",
+          "tags": [],
+          "id": "ba06c2b6-4824-4e82-a798-7b9adf366808",
+          "created_at": "2025-11-09T10:16:06.504555+00:00"
+        },
+        {
+          "question": "What are the main components of a file system organization?",
+          "answer": "File system organization includes inodes (containing file metadata), data blocks (storing actual file content), superblocks (overall file system information), and directory structures",
+          "tags": [],
+          "id": "021237ca-0524-464d-8205-37c32040ed5c",
+          "created_at": "2025-11-09T10:16:06.504555+00:00"
+        },
+        {
+          "question": "What are the primary synchronization mechanisms used with POSIX threads?",
+          "answer": "POSIX threads use mutexes, condition variables, and semaphores for synchronization to prevent race conditions and ensure thread safety",
+          "tags": [],
+          "id": "50aa9947-6ed1-4923-bfc8-dd66b95e78a7",
+          "created_at": "2025-11-09T10:16:06.504555+00:00"
+        }
+      ],
+      "created_at": "2025-11-09T10:15:49.445175+00:00",
+      "updated_at": "2025-11-09T10:16:06.504555+00:00"
+    },
+    {
+      "id": "2dbafa65-1f38-4600-8c6e-eb69a62f1cba",
+      "course_id": 13412743,
+      "course_name": "Computer Systems",
+      "assignment_id": null,
+      "assignment_name": null,
+      "notes": null,
+      "flashcards": [
+        {
+          "question": "What are the key system calls for file operations in Unix/Linux?",
+          "answer": "The key system calls are: open() - opens a file and returns a file descriptor, read() - reads data from a file descriptor, write() - writes data to a file descriptor",
+          "tags": [],
+          "id": "cd1a695e-ea6f-4c45-8d48-f0ff8e3612fc",
+          "created_at": "2025-11-09T10:17:09.328529+00:00"
+        },
+        {
+          "question": "Explain the difference between raw write() and stdio's fprintf()/fwrite()",
+          "answer": "Raw write() directly makes a system call to write data, while stdio functions like fprintf()/fwrite() use buffering for better performance by collecting multiple writes before making system calls",
+          "tags": [],
+          "id": "a35cc5c5-b8ae-4cae-b1ae-beb3cb6cc329",
+          "created_at": "2025-11-09T10:17:09.328529+00:00"
+        },
+        {
+          "question": "What are the st_mode permission bits and what do they represent?",
+          "answer": "st_mode bits include: read(4), write(2), execute(1) permissions for owner/group/others (9 bits total), plus special bits like setuid(4000), setgid(2000), and sticky bit(1000)",
+          "tags": [],
+          "id": "bc7427ac-ccfb-467d-8524-1f1b24321350",
+          "created_at": "2025-11-09T10:17:09.328529+00:00"
+        },
+        {
+          "question": "What is the purpose of setuid and setgid bits?",
+          "answer": "setuid/setgid bits allow a program to run with the permissions of the file owner/group rather than the user executing it. This enables controlled privilege escalation for specific programs",
+          "tags": [],
+          "id": "c440a1c2-ddf6-4957-937e-e5552b08b30e",
+          "created_at": "2025-11-09T10:17:09.328529+00:00"
+        },
+        {
+          "question": "What are POSIX Threads and why are they used?",
+          "answer": "POSIX Threads (pthreads) are a standardized threading API for creating and managing multiple threads within a process. They enable concurrent execution and shared memory parallelism in programs",
+          "tags": [],
+          "id": "1b2aee36-a7d2-4a9a-ba16-2ae08dadda13",
+          "created_at": "2025-11-09T10:17:09.328529+00:00"
+        }
+      ],
+      "created_at": "2025-11-09T10:16:40.072410+00:00",
+      "updated_at": "2025-11-09T10:17:09.328529+00:00"
+    }
+  ]
+}

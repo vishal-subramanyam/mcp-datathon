@@ -1,77 +1,43 @@
 """
-FastAPI backend that integrates OpenRouter with MCP servers.
+API routes for Canvas MPC.
+Handles chat requests, tool execution, and authentication.
 """
 import os
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
 import json
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+from backend.services.mcp_service import MCPService
+from backend.services.auth_service import AuthService
 
-from .service_layer import MCPService
+router = APIRouter()
 
-app = FastAPI(title="Canvas MCP API")
-
-# Get port from environment (Render provides this)
-PORT = int(os.getenv("PORT", 8000))
-
-# Get frontend URL from environment
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
-
-# CORS middleware - allow frontend and localhost for development
-# Build allowed origins list
-allowed_origins = [
-    FRONTEND_URL,
-    "http://localhost:8501",
-    "http://127.0.0.1:8501",
-]
-
-# Add Streamlit Cloud URL if provided
-STREAMLIT_URL = os.getenv("STREAMLIT_URL")
-if STREAMLIT_URL:
-    allowed_origins.append(STREAMLIT_URL)
-
-# In production, be more specific with origins
-# In development, allow all (for testing)
-if os.getenv("ENVIRONMENT") != "production":
-    allowed_origins = ["*"]  # Allow all in development
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Get OpenRouter API key from environment
+# OpenRouter configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
-    raise ValueError("OPENROUTER_API_KEY environment variable is required")
+    print("Warning: OPENROUTER_API_KEY not set. Chat functionality will not work.")
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-3.5-sonnet"  # You can change this to any model supported by OpenRouter
+MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
 
 
 class ChatMessage(BaseModel):
+    """Message in a conversation."""
     role: str
     content: str
 
 
 class QueryRequest(BaseModel):
+    """Request for chat endpoint."""
     query: str
     conversation_history: Optional[List[ChatMessage]] = []
+    user_id: Optional[str] = None  # Optional user ID for per-user credentials
 
 
 class QueryResponse(BaseModel):
+    """Response from chat endpoint."""
     response: str
     tool_calls: Optional[List[Dict[str, Any]]] = []
 
@@ -94,19 +60,72 @@ def parse_tool_name(function_name: str) -> Tuple[str, str]:
         raise ValueError(f"Unknown function prefix: {function_name}")
 
 
-async def execute_tool_call(function_name: str, arguments: Dict[str, Any]) -> str:
-    """Execute a tool call and return the result."""
+async def execute_tool_call(
+    function_name: str, 
+    arguments: Dict[str, Any],
+    user_id: Optional[str] = None
+) -> str:
+    """
+    Execute a tool call and return the result.
+    
+    Args:
+        function_name: Name of the function to call
+        arguments: Arguments to pass to the function
+        user_id: Optional user ID for per-user credentials
+    
+    Returns:
+        Result of the tool call as a string
+    """
     server_name, tool_name = parse_tool_name(function_name)
-    result = await MCPService.call_tool(server_name, tool_name, arguments)
+    
+    # Get user credentials if user_id is provided
+    credentials = None
+    if user_id:
+        # Map server name to service name
+        service_map = {
+            "canvas": "canvas",
+            "calendar": "google_calendar",
+            "gmail": "google_gmail"
+        }
+        service = service_map.get(server_name)
+        if service:
+            credentials = await AuthService.get_user_credentials(user_id, service)
+    
+    result = await MCPService.call_tool(server_name, tool_name, arguments, credentials)
     return result
 
 
-@app.post("/chat", response_model=QueryResponse)
-async def chat(request: QueryRequest):
+@router.post("/chat", response_model=QueryResponse)
+async def chat(
+    request: QueryRequest,
+    authorization: Optional[str] = Header(None)
+):
     """
     Process a user query through OpenRouter with MCP tool support.
+    
+    Args:
+        request: Query request with user message and history
+        authorization: Optional Bearer token for user authentication
+    
+    Returns:
+        Query response with assistant's reply
     """
     try:
+        if not OPENROUTER_API_KEY:
+            raise HTTPException(
+                status_code=500,
+                detail="OpenRouter API key not configured"
+            )
+        
+        # Extract user_id from authorization header or request
+        user_id = request.user_id
+        if authorization and authorization.startswith("Bearer "):
+            # Verify session token and get user_id
+            session_token = authorization[7:]
+            session = await AuthService.get_session(session_token)
+            if session:
+                user_id = session['user_id']
+        
         # Build conversation messages
         messages = []
         
@@ -156,8 +175,8 @@ Use the tools when needed to answer user queries."""
                 headers = {
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": base_url,  # Optional: for tracking
-                    "X-Title": "Canvas MCP Frontend"  # Optional: for tracking
+                    "HTTP-Referer": base_url,
+                    "X-Title": "Canvas MPC"
                 }
                 
                 response = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
@@ -188,8 +207,8 @@ Use the tools when needed to answer user queries."""
                     except json.JSONDecodeError:
                         arguments = {}
                     
-                    # Execute tool
-                    tool_result = await execute_tool_call(function_name, arguments)
+                    # Execute tool with user credentials
+                    tool_result = await execute_tool_call(function_name, arguments, user_id)
                     
                     # Add tool result to messages
                     tool_results.append({
@@ -222,18 +241,61 @@ Use the tools when needed to answer user queries."""
         )
 
 
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "Canvas MCP API",
-        "version": "1.0.0"
-    }
-
-
-@app.get("/tools")
+@router.get("/tools")
 async def get_tools():
-    """Get all available tools."""
+    """Get all available MCP tools."""
     return {"tools": MCPService.get_all_tools()}
+
+
+@router.post("/auth/credentials")
+async def store_credentials(
+    user_id: str,
+    service: str,
+    credentials: Dict[str, Any]
+):
+    """
+    Store user credentials for a specific service.
+    
+    Args:
+        user_id: User's unique identifier
+        service: Service name (canvas, google_calendar, google_gmail)
+        credentials: Credentials to store
+    """
+    success = await AuthService.store_user_credentials(user_id, service, credentials)
+    if success:
+        return {"message": "Credentials stored successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to store credentials")
+
+
+@router.get("/auth/credentials/{user_id}/{service}")
+async def get_credentials(user_id: str, service: str):
+    """
+    Get user credentials for a specific service.
+    
+    Args:
+        user_id: User's unique identifier
+        service: Service name
+    """
+    credentials = await AuthService.get_user_credentials(user_id, service)
+    if credentials:
+        return {"credentials": credentials}
+    else:
+        raise HTTPException(status_code=404, detail="Credentials not found")
+
+
+@router.delete("/auth/credentials/{user_id}/{service}")
+async def delete_credentials(user_id: str, service: str):
+    """
+    Delete user credentials for a specific service.
+    
+    Args:
+        user_id: User's unique identifier
+        service: Service name
+    """
+    success = await AuthService.delete_user_credentials(user_id, service)
+    if success:
+        return {"message": "Credentials deleted successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to delete credentials")
 

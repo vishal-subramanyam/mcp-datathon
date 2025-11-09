@@ -12,7 +12,7 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 def authenticate():
     """Authenticate and create token.json file."""
     creds = None
-    token_path = os.getenv("GMAIL_TOKEN_PATH", "token.json")
+    token_path = os.getenv("GMAIL_TOKEN_PATH", "data/tokens/gmail_token.json")
     credentials_path = os.getenv("GMAIL_CREDENTIALS_PATH", "credentials.json")
     
     # Try to load from .env file

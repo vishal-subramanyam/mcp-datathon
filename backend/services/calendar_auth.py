@@ -12,7 +12,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 def authenticate():
     """Authenticate and create calendar_token.json file."""
     creds = None
-    token_path = os.getenv("CALENDAR_TOKEN_PATH", "calendar_token.json")
+    token_path = os.getenv("CALENDAR_TOKEN_PATH", "data/tokens/calendar_token.json")
     credentials_path = os.getenv("CALENDAR_CREDENTIALS_PATH", "credentials.json")
     
     # Try to load from .env file

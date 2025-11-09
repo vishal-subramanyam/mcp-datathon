@@ -1,12 +1,22 @@
 """
-Streamlit frontend for Canvas MCP.
+Streamlit frontend for Canvas MPC.
+Main application entry point.
 """
 import streamlit as st
-import requests
 import os
-from typing import List, Dict, Any
 
-# Backend API URL - use 127.0.0.1 instead of localhost for better Windows compatibility
+# Import pages
+from frontend.utils.api import check_backend_connection, send_message
+
+# Configure page
+st.set_page_config(
+    page_title="Canvas MPC Assistant",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Get API URL from environment
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 # Initialize session state
@@ -14,60 +24,21 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
-
-
-def check_backend_connection() -> bool:
-    """Check if backend is accessible."""
-    try:
-        response = requests.get(f"{API_URL}/health", timeout=2)
-        return response.status_code == 200
-    except:
-        return False
-
-def send_message(query: str) -> str:
-    """Send a message to the backend API."""
-    try:
-        # Prepare conversation history
-        conversation_history = [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in st.session_state.conversation_history
-        ]
-        
-        payload = {
-            "query": query,
-            "conversation_history": conversation_history
-        }
-        
-        response = requests.post(f"{API_URL}/chat", json=payload, timeout=120)
-        response.raise_for_status()
-        result = response.json()
-        return result.get("response", "No response received")
-    
-    except requests.exceptions.ConnectionError:
-        return f"❌ **Connection Error**: Cannot connect to backend at `{API_URL}`\n\n**Please make sure:**\n1. The backend is running: `uvicorn backend.api:app --reload --port 8000`\n2. Try using `127.0.0.1:8000` instead of `localhost:8000`\n3. Check if Windows Firewall is blocking the connection"
-    except requests.exceptions.Timeout:
-        return f"⏱️ **Timeout Error**: Request took too long. The backend might be overloaded or there's a network issue."
-    except requests.exceptions.RequestException as e:
-        return f"❌ **Error**: {str(e)}"
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "backend_checked" not in st.session_state:
+    st.session_state.backend_checked = False
 
 
 def main():
-    st.set_page_config(
-        page_title="Canvas MCP Assistant",
-        page_icon="🎓",
-        layout="wide"
-    )
-    
-    st.title("🎓 Canvas MCP Assistant")
+    """Main application function."""
+    st.title("🎓 Canvas MPC Assistant")
     st.markdown("Ask me anything about your courses, calendar, or emails!")
     
     # Check backend connection
-    if "backend_checked" not in st.session_state:
-        st.session_state.backend_checked = False
-    
     if not st.session_state.backend_checked:
         with st.spinner("Checking backend connection..."):
-            if check_backend_connection():
+            if check_backend_connection(API_URL):
                 st.success(f"✅ Connected to backend at {API_URL}")
                 st.session_state.backend_checked = True
             else:
@@ -75,19 +46,19 @@ def main():
                 st.info("""
                 **To start the backend:**
                 1. Open a new terminal
-                2. Run: `uvicorn backend.api:app --reload --port 8000`
+                2. Run: `uvicorn backend.main:app --reload --port 8000`
                 3. Wait for "Application startup complete"
                 4. Refresh this page
                 
                 **If you're on Windows and having connection issues:**
-                - Try: `uvicorn backend.api:app --reload --port 8000 --host 127.0.0.1`
+                - Try: `uvicorn backend.main:app --reload --port 8000 --host 127.0.0.1`
                 - Check Windows Firewall settings
                 - Make sure no proxy is interfering with localhost
                 """)
                 st.session_state.backend_checked = True
                 st.stop()
     
-    # Sidebar with info
+    # Sidebar
     with st.sidebar:
         st.header("About")
         st.markdown("""
@@ -95,18 +66,36 @@ def main():
         - **Canvas**: View courses, assignments, and create new ones
         - **Calendar**: View and create calendar events
         - **Gmail**: Read and send emails
+        - **Flashcards**: Create and study flashcards from course content
         
         Just ask in natural language!
         """)
         
+        st.divider()
+        
         st.markdown(f"**Backend URL:** `{API_URL}`")
         
+        # User ID input (optional)
+        st.subheader("User Settings")
+        user_id = st.text_input(
+            "User ID (optional)",
+            value=st.session_state.user_id or "",
+            help="Enter your user ID to use per-user credentials"
+        )
+        if user_id:
+            st.session_state.user_id = user_id
+            st.success(f"Using user ID: {user_id}")
+        
+        st.divider()
+        
+        # Connection test button
         if st.button("Test Backend Connection"):
-            if check_backend_connection():
+            if check_backend_connection(API_URL):
                 st.success("✅ Backend is accessible!")
             else:
                 st.error("❌ Cannot reach backend")
         
+        # Clear conversation button
         if st.button("Clear Conversation"):
             st.session_state.messages = []
             st.session_state.conversation_history = []
@@ -129,7 +118,12 @@ def main():
         # Get response from backend
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = send_message(prompt)
+                response = send_message(
+                    API_URL,
+                    prompt,
+                    st.session_state.conversation_history,
+                    st.session_state.user_id
+                )
                 st.markdown(response)
         
         # Add assistant response to chat

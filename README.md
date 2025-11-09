@@ -1,2 +1,0 @@
-# mcp-datathon
-Canvas MCP

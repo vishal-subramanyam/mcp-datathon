@@ -7,7 +7,7 @@ from typing import List, Any, Optional, Dict
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from flashcard_storage import FlashcardStorage
+from backend.services.flashcard_storage import FlashcardStorage
 
 # -----------------------------
 # MCP SERVER
