@@ -435,3 +435,342 @@ class FlashcardStorage:
             for card in cards:
                 writer.writerow([card['front'], card['back']])
 
+
+# ============================================================================
+# Static Methods for "Sets" JSON Structure (used by MCP service)
+# ============================================================================
+
+import uuid
+
+FLASHCARD_SETS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "flashcards", "flashcards.json")
+PROGRESS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "flashcards", "progress.json")
+
+
+def _load_sets_data() -> Dict[str, Any]:
+    """Load flashcard sets from JSON file."""
+    if os.path.exists(FLASHCARD_SETS_FILE):
+        try:
+            with open(FLASHCARD_SETS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {"sets": []}
+    return {"sets": []}
+
+
+def _save_sets_data(data: Dict[str, Any]):
+    """Save flashcard sets to JSON file."""
+    os.makedirs(os.path.dirname(FLASHCARD_SETS_FILE), exist_ok=True)
+    with open(FLASHCARD_SETS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _load_progress_data() -> Dict[str, Any]:
+    """Load progress data from JSON file."""
+    if os.path.exists(PROGRESS_FILE):
+        try:
+            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {"sets": {}}
+    return {"sets": {}}
+
+
+def _save_progress_data(data: Dict[str, Any]):
+    """Save progress data to JSON file."""
+    os.makedirs(os.path.dirname(PROGRESS_FILE), exist_ok=True)
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+# Static methods for MCP service
+class FlashcardStorageStatic:
+    """Static methods for flashcard operations using the sets JSON structure."""
+    
+    @staticmethod
+    def create_flashcard_set(
+        course_id: int,
+        course_name: str,
+        assignment_id: Optional[int] = None,
+        assignment_name: Optional[str] = None,
+        notes: Optional[str] = None
+    ) -> str:
+        """Create a new flashcard set.
+        
+        Args:
+            course_id: Canvas course ID
+            course_name: Course name
+            assignment_id: Optional assignment ID
+            assignment_name: Optional assignment name
+            notes: Optional notes
+            
+        Returns:
+            Set ID
+        """
+        data = _load_sets_data()
+        
+        set_id = str(uuid.uuid4())
+        new_set = {
+            "id": set_id,
+            "course_id": course_id,
+            "course_name": course_name,
+            "assignment_id": assignment_id,
+            "assignment_name": assignment_name,
+            "notes": notes,
+            "flashcards": [],
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        data["sets"].append(new_set)
+        _save_sets_data(data)
+        
+        # Initialize progress tracking for this set
+        progress_data = _load_progress_data()
+        progress_data["sets"][set_id] = {
+            "flashcard_reviews": {},
+            "last_reviewed": None,
+            "total_reviews": 0,
+            "mastered_count": 0,
+            "needs_review_count": 0
+        }
+        _save_progress_data(progress_data)
+        
+        return set_id
+    
+    @staticmethod
+    def add_flashcards_to_set(set_id: str, flashcards: List[Dict[str, Any]]):
+        """Add flashcards to a set.
+        
+        Args:
+            set_id: Set ID
+            flashcards: List of flashcard dicts with 'question' and 'answer' keys
+        """
+        data = _load_sets_data()
+        
+        # Find the set
+        target_set = None
+        for s in data["sets"]:
+            if s["id"] == set_id:
+                target_set = s
+                break
+        
+        if not target_set:
+            raise ValueError(f"Flashcard set {set_id} not found")
+        
+        # Add flashcards
+        for card in flashcards:
+            card_id = str(uuid.uuid4())
+            new_card = {
+                "question": card.get("question", ""),
+                "answer": card.get("answer", ""),
+                "tags": card.get("tags", []),
+                "id": card_id,
+                "created_at": datetime.now().isoformat()
+            }
+            target_set["flashcards"].append(new_card)
+            
+            # Initialize progress tracking for this card
+            progress_data = _load_progress_data()
+            if set_id not in progress_data["sets"]:
+                progress_data["sets"][set_id] = {
+                    "flashcard_reviews": {},
+                    "last_reviewed": None,
+                    "total_reviews": 0,
+                    "mastered_count": 0,
+                    "needs_review_count": 0
+                }
+            
+            progress_data["sets"][set_id]["flashcard_reviews"][card_id] = {
+                "times_reviewed": 0,
+                "times_correct": 0,
+                "times_incorrect": 0,
+                "last_reviewed": None,
+                "mastered": False,
+                "difficulty": "medium"
+            }
+            _save_progress_data(progress_data)
+        
+        target_set["updated_at"] = datetime.now().isoformat()
+        _save_sets_data(data)
+    
+    @staticmethod
+    def get_flashcard_set(set_id: str) -> Optional[Dict[str, Any]]:
+        """Get a flashcard set by ID.
+        
+        Args:
+            set_id: Set ID
+            
+        Returns:
+            Flashcard set dict or None
+        """
+        data = _load_sets_data()
+        for s in data["sets"]:
+            if s["id"] == set_id:
+                return s
+        return None
+    
+    @staticmethod
+    def get_flashcard_sets_by_course(course_id: int) -> List[Dict[str, Any]]:
+        """Get all flashcard sets for a course.
+        
+        Args:
+            course_id: Canvas course ID
+            
+        Returns:
+            List of flashcard sets
+        """
+        data = _load_sets_data()
+        return [s for s in data["sets"] if s.get("course_id") == course_id]
+    
+    @staticmethod
+    def get_flashcards_needing_review(set_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get flashcards that need review.
+        
+        Args:
+            set_id: Set ID
+            limit: Optional limit on number of cards
+            
+        Returns:
+            List of flashcards
+        """
+        flashcard_set = FlashcardStorageStatic.get_flashcard_set(set_id)
+        if not flashcard_set:
+            return []
+        
+        progress_data = _load_progress_data()
+        set_progress = progress_data.get("sets", {}).get(set_id, {})
+        reviews = set_progress.get("flashcard_reviews", {})
+        
+        # Get cards that haven't been mastered
+        cards_needing_review = []
+        for card in flashcard_set.get("flashcards", []):
+            card_id = card["id"]
+            review_data = reviews.get(card_id, {})
+            if not review_data.get("mastered", False):
+                cards_needing_review.append(card)
+        
+        # Sort by times reviewed (least reviewed first)
+        cards_needing_review.sort(key=lambda c: reviews.get(c["id"], {}).get("times_reviewed", 0))
+        
+        if limit:
+            return cards_needing_review[:limit]
+        return cards_needing_review
+    
+    @staticmethod
+    def record_flashcard_review(set_id: str, flashcard_id: str, correct: bool):
+        """Record a flashcard review.
+        
+        Args:
+            set_id: Set ID
+            flashcard_id: Flashcard ID
+            correct: Whether the answer was correct
+        """
+        progress_data = _load_progress_data()
+        
+        if set_id not in progress_data["sets"]:
+            progress_data["sets"][set_id] = {
+                "flashcard_reviews": {},
+                "last_reviewed": None,
+                "total_reviews": 0,
+                "mastered_count": 0,
+                "needs_review_count": 0
+            }
+        
+        set_progress = progress_data["sets"][set_id]
+        
+        if flashcard_id not in set_progress["flashcard_reviews"]:
+            set_progress["flashcard_reviews"][flashcard_id] = {
+                "times_reviewed": 0,
+                "times_correct": 0,
+                "times_incorrect": 0,
+                "last_reviewed": None,
+                "mastered": False,
+                "difficulty": "medium"
+            }
+        
+        card_progress = set_progress["flashcard_reviews"][flashcard_id]
+        card_progress["times_reviewed"] += 1
+        if correct:
+            card_progress["times_correct"] += 1
+        else:
+            card_progress["times_incorrect"] += 1
+        card_progress["last_reviewed"] = datetime.now().isoformat()
+        
+        # Check if mastered (correct 3 times in a row or 80% accuracy with 5+ reviews)
+        if card_progress["times_reviewed"] >= 5:
+            accuracy = card_progress["times_correct"] / card_progress["times_reviewed"]
+            if accuracy >= 0.8:
+                card_progress["mastered"] = True
+        
+        set_progress["last_reviewed"] = datetime.now().isoformat()
+        set_progress["total_reviews"] += 1
+        
+        # Update counts
+        mastered_count = sum(1 for c in set_progress["flashcard_reviews"].values() if c.get("mastered", False))
+        set_progress["mastered_count"] = mastered_count
+        set_progress["needs_review_count"] = len(set_progress["flashcard_reviews"]) - mastered_count
+        
+        _save_progress_data(progress_data)
+    
+    @staticmethod
+    def get_flashcard_progress(set_id: str) -> Dict[str, Any]:
+        """Get progress for a flashcard set.
+        
+        Args:
+            set_id: Set ID
+            
+        Returns:
+            Progress dictionary
+        """
+        progress_data = _load_progress_data()
+        return progress_data.get("sets", {}).get(set_id, {
+            "total_reviews": 0,
+            "mastered_count": 0,
+            "needs_review_count": 0,
+            "last_reviewed": None
+        })
+    
+    @staticmethod
+    def get_all_sets() -> List[Dict[str, Any]]:
+        """Get all flashcard sets.
+        
+        Returns:
+            List of all flashcard sets
+        """
+        data = _load_sets_data()
+        return data.get("sets", [])
+    
+    @staticmethod
+    def delete_flashcard_set(set_id: str):
+        """Delete a flashcard set.
+        
+        Args:
+            set_id: Set ID
+        """
+        data = _load_sets_data()
+        data["sets"] = [s for s in data["sets"] if s["id"] != set_id]
+        _save_sets_data(data)
+        
+        # Remove progress data
+        progress_data = _load_progress_data()
+        if set_id in progress_data.get("sets", {}):
+            del progress_data["sets"][set_id]
+            _save_progress_data(progress_data)
+
+
+# Alias for backward compatibility with MCP service
+FlashcardStorage.create_flashcard_set = FlashcardStorageStatic.create_flashcard_set
+FlashcardStorage.add_flashcards_to_set = FlashcardStorageStatic.add_flashcards_to_set
+FlashcardStorage.get_flashcard_set = FlashcardStorageStatic.get_flashcard_set
+FlashcardStorage.get_flashcard_sets_by_course = FlashcardStorageStatic.get_flashcard_sets_by_course
+FlashcardStorage.get_flashcards_needing_review = FlashcardStorageStatic.get_flashcards_needing_review
+FlashcardStorage.record_flashcard_review = FlashcardStorageStatic.record_flashcard_review
+FlashcardStorage.get_flashcard_progress = FlashcardStorageStatic.get_flashcard_progress
+FlashcardStorage.get_all_sets = FlashcardStorageStatic.get_all_sets
+FlashcardStorage.delete_flashcard_set = FlashcardStorageStatic.delete_flashcard_set
+
+
+# Standalone function for health check
+def get_all_flashcard_sets() -> List[Dict[str, Any]]:
+    """Get all flashcard sets (standalone function for health check)."""
+    return FlashcardStorageStatic.get_all_sets()

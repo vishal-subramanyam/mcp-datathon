@@ -7,6 +7,9 @@ import sys
 from typing import Dict, Any, List, Optional
 import asyncio
 
+# Explicit exports
+__all__ = ['MCPService', 'health_check']
+
 # Add parent directory to path to import MCP servers
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -186,7 +189,7 @@ class MCPService:
     """Service layer for MCP tools."""
     
     @staticmethod
-    async def call_tool(server_name: str, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
+    async def call_tool(server_name: str, tool_name: str, arguments: Optional[Dict[str, Any]] = None, credentials: Optional[Dict[str, Any]] = None) -> str:
         """
         Call a tool from an MCP server.
         
@@ -194,6 +197,7 @@ class MCPService:
             server_name: Name of the MCP server ('canvas', 'calendar', 'gmail', 'flashcard')
             tool_name: Name of the tool to call
             arguments: Tool arguments
+            credentials: Optional user credentials for the service
             
         Returns:
             Tool response as a string
@@ -203,20 +207,20 @@ class MCPService:
         
         try:
             if server_name == "canvas":
-                return await MCPService._call_canvas_tool(tool_name, arguments)
+                return await MCPService._call_canvas_tool(tool_name, arguments, credentials)
             elif server_name == "calendar":
-                return await MCPService._call_calendar_tool(tool_name, arguments)
+                return await MCPService._call_calendar_tool(tool_name, arguments, credentials)
             elif server_name == "gmail":
-                return await MCPService._call_gmail_tool(tool_name, arguments)
+                return await MCPService._call_gmail_tool(tool_name, arguments, credentials)
             elif server_name == "flashcard":
-                return await MCPService._call_flashcard_tool(tool_name, arguments)
+                return await MCPService._call_flashcard_tool(tool_name, arguments, credentials)
             else:
                 return f"Error: Unknown server '{server_name}'"
         except Exception as e:
             return f"Error calling tool: {str(e)}"
     
     @staticmethod
-    async def _call_canvas_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _call_canvas_tool(tool_name: str, arguments: Dict[str, Any], credentials: Optional[Dict[str, Any]] = None) -> str:
         """Call a Canvas tool."""
         if tool_name == "get_courses":
             courses = fetch_courses()
@@ -1547,7 +1551,7 @@ class MCPService:
             return f"Error: Unknown Canvas tool '{tool_name}'"
     
     @staticmethod
-    async def _call_calendar_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _call_calendar_tool(tool_name: str, arguments: Dict[str, Any], credentials: Optional[Dict[str, Any]] = None) -> str:
         """Call a Calendar tool."""
         if tool_name == "list_calendars":
             calendars = list_calendars()
@@ -1654,7 +1658,7 @@ class MCPService:
             return f"Error: Unknown Calendar tool '{tool_name}'"
     
     @staticmethod
-    async def _call_gmail_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _call_gmail_tool(tool_name: str, arguments: Dict[str, Any], credentials: Optional[Dict[str, Any]] = None) -> str:
         """Call a Gmail tool."""
         if tool_name == "list_emails":
             query = arguments.get("query", "")
@@ -1769,7 +1773,7 @@ class MCPService:
             return f"Error: Unknown Gmail tool '{tool_name}'"
     
     @staticmethod
-    async def _call_flashcard_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _call_flashcard_tool(tool_name: str, arguments: Dict[str, Any], credentials: Optional[Dict[str, Any]] = None) -> str:
         """Call a Flashcard tool.
         
         Note: tool_name has the 'flashcard_' prefix removed by parse_tool_name.
@@ -3470,3 +3474,85 @@ class MCPService:
         
         return tools
 
+
+# Health check function for API
+async def health_check() -> Dict[str, Any]:
+    """
+    Perform a health check on all MCP services.
+    Returns health status and available services.
+    """
+    from datetime import datetime
+    
+    services_status = {}
+    overall_status = "healthy"
+    
+    try:
+        # Check Canvas service
+        try:
+            from backend.mcp_servers.canvas_server import fetch_courses
+            # Quick test - just check if the function is available
+            services_status["canvas"] = {
+                "status": "healthy",
+                "available": True
+            }
+        except Exception as e:
+            services_status["canvas"] = {
+                "status": "degraded",
+                "available": False,
+                "error": str(e)
+            }
+            overall_status = "degraded"
+        
+        # Check Calendar service
+        try:
+            from backend.mcp_servers.calendar_server import list_calendars
+            services_status["calendar"] = {
+                "status": "healthy",
+                "available": True
+            }
+        except Exception as e:
+            services_status["calendar"] = {
+                "status": "degraded",
+                "available": False,
+                "error": str(e)
+            }
+            overall_status = "degraded"
+        
+        # Check Gmail service
+        try:
+            from backend.mcp_servers.gmail_server import list_labels
+            services_status["gmail"] = {
+                "status": "healthy",
+                "available": True
+            }
+        except Exception as e:
+            services_status["gmail"] = {
+                "status": "degraded",
+                "available": False,
+                "error": str(e)
+            }
+            overall_status = "degraded"
+        
+        # Check Flashcard service
+        try:
+            from backend.services.flashcard_storage import get_all_flashcard_sets
+            services_status["flashcard"] = {
+                "status": "healthy",
+                "available": True
+            }
+        except Exception as e:
+            services_status["flashcard"] = {
+                "status": "degraded",
+                "available": False,
+                "error": str(e)
+            }
+            overall_status = "degraded"
+        
+    except Exception as e:
+        overall_status = "unhealthy"
+    
+    return {
+        "status": overall_status,
+        "services": services_status,
+        "timestamp": datetime.utcnow().isoformat()
+    }
